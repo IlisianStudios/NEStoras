@@ -1,0 +1,2 @@
+# NEStoras
+A nes emulator 

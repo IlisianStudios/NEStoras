@@ -17,15 +17,15 @@ void cpu_reset(CPU *cpu){
     cpu->cycles = 0;
 }
 
-instruction fetch(CPU *cpu) {
-    const instruction inst = lookup[bus_read(cpu->pc)];
-    cpu->pc++;
-    return inst;
+void fetch(CPU *cpu) {
+    const uint8_t opcode = bus_read(advance_pc(cpu));
+    cpu->fetched = opcode;
 }
 
 void cpu_step(CPU *cpu) {
     // next instruction using the pc point at mem
-    instruction inst = fetch(cpu);
+    instruction inst = lookup[cpu->fetched];
+
 
     uint8_t cycles = inst.cycles;
 

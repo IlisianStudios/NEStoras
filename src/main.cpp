@@ -5,10 +5,10 @@
 void init_lookup() {
     for (int i = 0; i < 256; i++) {
         lookup[i] = (instruction){
-            "???", op_NOOP, add_IMM, 2, 2
+            "???", op_NOOP, addr_IMM, 2, 2
         };
     }
-    lookup[0xA9] = (instruction){ "LDA", op_LDA, add_IMM, 2, 2 };
+    lookup[0xA9] = (instruction){ "LDA", op_LDA, addr_IMM, 2, 2 };
 }
 
 void init() {

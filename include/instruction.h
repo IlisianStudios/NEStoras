@@ -31,8 +31,20 @@ typedef struct {
 extern instruction lookup[256];
 
 uint8_t op_LDA(CPU *cpu);
-uint8_t add_IMM(CPU *cpu);
 uint8_t op_NOOP(CPU *cpu);
+
+uint8_t addr_IMP(CPU *cpu);
+uint8_t addr_IMM(CPU *cpu);
+uint8_t addr_ZPO(CPU *cpu);
+uint8_t addr_ZPX(CPU *cpu);
+uint8_t addr_ZPY(CPU *cpu);
+uint8_t addr_REL(CPU *cpu);
+uint8_t addr_ABS(CPU *cpu);
+uint8_t addr_ABSX(CPU *cpu);
+uint8_t addr_ABSY(CPU *cpu);
+uint8_t addr_IDX(CPU *cpu);
+uint8_t addr_IND(CPU *cpu);
+uint8_t addr_IZY(CPU *cpu);
 
 #ifdef __cplusplus
 }

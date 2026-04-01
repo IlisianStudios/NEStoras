@@ -22,6 +22,10 @@ typedef struct{
 
     uint8_t cycles;
     uint16_t total_cycles;
+
+    uint16_t addr_abs;
+    uint16_t addr_rel;
+    uint8_t fetched;
 } CPU;
 
 void cpu_reset(CPU *cpu);
@@ -29,3 +33,9 @@ void cpu_step(CPU *cpu);
 void set_flag(CPU *cpu, uint8_t flag, const bool value);
 bool get_flag(const CPU *cpu, uint8_t flag);
 void update_nz(CPU *cpu, uint8_t value);
+
+uint16_t static inline advance_pc(CPU *cpu){
+    const uint16_t mem = cpu->pc;
+    cpu->pc++;
+    return mem;
+}

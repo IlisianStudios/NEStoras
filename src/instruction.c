@@ -11,6 +11,13 @@ uint8_t op_LDA(CPU *cpu) {
     return 1; // This instruction allows extra cycle
 }
 
+uint8_t op_LDX(CPU *cpu) {
+    cpu->x = bus_read(cpu->pc);
+    set_flag(cpu, FLAG_Z, cpu->a);
+    set_flag(cpu, FLAG_N, cpu->a);
+    return 1; // This instruction allows extra cycle
+}
+
 uint8_t op_NOOP(CPU *cpu) {
     return 0;
 }

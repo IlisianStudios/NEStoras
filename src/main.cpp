@@ -8,6 +8,7 @@ void init_lookup() {
             "???", op_NOOP, addr_IMM, 2, 2
         };
     }
+    // LDA
     lookup[0xA9] = (instruction){ "LDA", op_LDA, addr_IMM, 2, 2 };
     lookup[0xA5] = (instruction){ "LDA", op_LDA, addr_ZPO, 2, 3 };
     lookup[0xB5] = (instruction){ "LDA", op_LDA, addr_ZPX, 2, 4 };
@@ -16,6 +17,19 @@ void init_lookup() {
     lookup[0xB9] = (instruction){ "LDA", op_LDA, addr_ABY, 2, 4 };
     lookup[0xA1] = (instruction){ "LDA", op_LDA, addr_IDX, 2, 6 };
     lookup[0xB1] = (instruction){ "LDA", op_LDA, addr_IZY, 2, 5 };
+    // LDX
+    lookup[0xA2] = (instruction){ "LDX", op_LDX, addr_IMM, 2, 2 };
+    lookup[0xA6] = (instruction){ "LDX", op_LDX, addr_ZPO, 2, 3 };
+    lookup[0xB6] = (instruction){ "LDX", op_LDX, addr_ZPY, 2, 4 };
+    lookup[0xAE] = (instruction){ "LDX", op_LDX, addr_ABS, 2, 4 };
+    lookup[0xBE] = (instruction){ "LDX", op_LDX, addr_ABY, 2, 4 };
+    // LDY
+    lookup[0xA0] = (instruction){ "LDY", op_LDY, addr_IMM, 2, 2 };
+    lookup[0xA4] = (instruction){ "LDY", op_LDY, addr_ZPO, 2, 3 };
+    lookup[0xB4] = (instruction){ "LDY", op_LDY, addr_ZPX, 2, 4 };
+    lookup[0xAC] = (instruction){ "LDY", op_LDY, addr_ABS, 2, 4 };
+    lookup[0xBC] = (instruction){ "LDY", op_LDY, addr_ABX, 2, 4 };
+
 }
 
 void init() {

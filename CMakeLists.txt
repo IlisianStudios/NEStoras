@@ -13,6 +13,14 @@ find_package(SDL2 REQUIRED CONFIG)
 
 add_executable(NEStoras
     src/main.cpp
+    src/cpu.c
+        include/bus.h
+        src/bus.c
+)
+
+target_include_directories(NEStoras PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+    ${SDL2_INCLUDE_DIRS}
 )
 
 target_link_libraries(NEStoras PRIVATE SDL2::SDL2)

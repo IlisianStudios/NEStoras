@@ -18,6 +18,11 @@ uint8_t op_LDX(CPU *cpu) {
     return 1; // This instruction allows extra cycle
 }
 
+uint8_t op_STA(CPU *cpu) {
+    bus_write(cpu->addr_abs, cpu->a);
+    return 0;
+}
+
 uint8_t op_NOOP(CPU *cpu) {
     return 0;
 }

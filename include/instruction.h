@@ -33,6 +33,7 @@ extern instruction lookup[256];
 uint8_t op_LDA(CPU *cpu);
 uint8_t op_LDX(CPU *cpu);
 uint8_t op_LDY(CPU *cpu);
+uint8_t op_STA(CPU *cpu);
 uint8_t op_NOOP(CPU *cpu);
 
 uint8_t addr_IMP(CPU *cpu);

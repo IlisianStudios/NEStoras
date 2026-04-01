@@ -9,6 +9,13 @@ void init_lookup() {
         };
     }
     lookup[0xA9] = (instruction){ "LDA", op_LDA, addr_IMM, 2, 2 };
+    lookup[0xA5] = (instruction){ "LDA", op_LDA, addr_ZPO, 2, 3 };
+    lookup[0xB5] = (instruction){ "LDA", op_LDA, addr_ZPX, 2, 4 };
+    lookup[0xAD] = (instruction){ "LDA", op_LDA, addr_ABS, 2, 4 };
+    lookup[0xBD] = (instruction){ "LDA", op_LDA, addr_ABX, 2, 4 };
+    lookup[0xB9] = (instruction){ "LDA", op_LDA, addr_ABY, 2, 4 };
+    lookup[0xA1] = (instruction){ "LDA", op_LDA, addr_IDX, 2, 6 };
+    lookup[0xB1] = (instruction){ "LDA", op_LDA, addr_IZY, 2, 5 };
 }
 
 void init() {

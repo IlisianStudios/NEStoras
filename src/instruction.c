@@ -63,14 +63,14 @@ uint8_t addr_ABS(CPU *cpu) {
     return 0;
 }
 
-uint8_t addr_ABSX(CPU *cpu) {
+uint8_t addr_ABX(CPU *cpu) {
     uint16_t const base =  read_word(cpu);
     cpu->addr_abs = base +  + cpu->x;
 
     return (cpu->addr_abs & 0xFF00) != (base & 0xFF00);
 }
 
-uint8_t addr_ABSY(CPU *cpu) {
+uint8_t addr_ABY(CPU *cpu) {
     uint16_t const base =  read_word(cpu);
     cpu->addr_abs = base +  + cpu->y;
 

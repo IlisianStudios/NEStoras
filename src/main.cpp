@@ -39,6 +39,14 @@ void init_lookup() {
     lookup[0x99] = (instruction){ "STA", op_STA, addr_ABY, 3, 5 };
     lookup[0x81] = (instruction){ "STA", op_STA, addr_IDX, 2, 6 };
     lookup[0x91] = (instruction){ "STA", op_STA, addr_IZY, 2, 6 };
+    // STX
+    lookup[0x85] = (instruction){ "STX", op_STX, addr_ZPO, 2, 3 };
+    lookup[0x95] = (instruction){ "STX", op_STX, addr_ZPY, 2, 4 };
+    lookup[0x8D] = (instruction){ "STX", op_STX, addr_ABS, 3, 4 };
+    // STY
+    lookup[0x85] = (instruction){ "STY", op_STY, addr_ZPO, 2, 3 };
+    lookup[0x95] = (instruction){ "STY", op_STY, addr_ZPY, 2, 4 };
+    lookup[0x8D] = (instruction){ "STY", op_STY, addr_ABS, 3, 4 };
 }
 
 void init() {

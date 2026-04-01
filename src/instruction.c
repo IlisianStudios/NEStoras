@@ -23,6 +23,16 @@ uint8_t op_STA(CPU *cpu) {
     return 0;
 }
 
+uint8_t op_STX(CPU *cpu) {
+    bus_write(cpu->addr_abs, cpu->x);
+    return 0;
+}
+
+uint8_t op_STY(CPU *cpu) {
+    bus_write(cpu->addr_abs, cpu->y);
+    return 0;
+}
+
 uint8_t op_NOOP(CPU *cpu) {
     return 0;
 }

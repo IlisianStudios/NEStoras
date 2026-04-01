@@ -1,5 +1,16 @@
 #pragma once
 #include <stdint.h>
+#include <stdbool.h>
+
+// Flag bit positions
+#define FLAG_C 0x01  // Carry
+#define FLAG_Z 0x02  // Zero
+#define FLAG_I 0x04  // Interrupt disable
+#define FLAG_D 0x08  // Decimal (ignored on NES, but the bit exists)
+#define FLAG_B 0x10  // Break
+#define FLAG_U 0x20  // Unused (always 1)
+#define FLAG_V 0x40  // Overflow
+#define FLAG_N 0x80  // Negative
 
 typedef struct{
     uint8_t a;
@@ -9,4 +20,12 @@ typedef struct{
     uint16_t pc;
     uint8_t status;
 
+    uint8_t cycles;
+    uint16_t total_cycles;
 } CPU;
+
+void cpu_reset(CPU *cpu);
+void cpu_step(CPU *cpu);
+void set_flag(CPU *cpu, uint8_t flag, const bool value);
+bool get_flag(const CPU *cpu, uint8_t flag);
+void update_nz(CPU *cpu, uint8_t value);

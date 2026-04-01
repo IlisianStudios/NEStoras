@@ -14,8 +14,10 @@ find_package(SDL2 REQUIRED CONFIG)
 add_executable(NEStoras
     src/main.cpp
     src/cpu.c
-        include/bus.h
-        src/bus.c
+    include/bus.h
+    src/bus.c
+        include/instruction.h
+        src/instruction.c
 )
 
 target_include_directories(NEStoras PRIVATE

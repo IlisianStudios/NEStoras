@@ -4,6 +4,18 @@
 #include "../include/cpu.h"
 #include "../include/instruction.h"
 
+static inline void stack_push(CPU *cpu, uint8_t value)
+{
+    bus_write(0x0100 | cpu->sp, value);
+    cpu->sp--;
+}
+
+static inline uint8_t stack_pop(CPU *cpu)
+{
+    cpu->sp++;
+    return bus_read(0x0100 | cpu->sp);
+}
+
 uint8_t op_LDA(CPU *cpu) {
     cpu->a = bus_read(cpu->pc);
     set_flag(cpu, FLAG_Z, cpu->a);
@@ -65,6 +77,29 @@ uint8_t op_TSX(CPU *cpu) {
 
 uint8_t op_TXS(CPU *cpu) {
     cpu->sp = cpu->x;
+    return 0;
+}
+
+uint8_t op_PHA(CPU *cpu) {
+    stack_push(cpu, cpu->a);
+    return 0;
+}
+
+uint8_t op_PLA(CPU *cpu) {
+    cpu->a = stack_pop(cpu);
+    update_nz(cpu, cpu->a);
+    return 0;
+}
+
+uint8_t op_PHP(CPU *cpu) {
+    stack_push(cpu, cpu->status | FLAG_B | FLAG_U);
+    return 0;
+}
+
+uint8_t op_PLP(CPU *cpu) {
+    cpu->status = stack_pop(cpu);
+    set_flag(cpu, FLAG_U, true);
+    set_flag(cpu, FLAG_B, false);
     return 0;
 }
 
@@ -176,4 +211,73 @@ uint8_t addr_IZY(CPU *cpu) {
 }
 
 instruction lookup[256];
+
+//https://masswerk.at/6502/6502_instruction_set.html#LSR
+void init_lookup() {
+    for (int i = 0; i < 256; i++) {
+        lookup[i] = (instruction){
+            "???", op_NOOP, addr_IMP, 1, 2
+        };
+    }
+    // NOP
+    lookup[0xEA] = (instruction){ "NOP", op_NOOP, addr_IMP, 1, 2 };
+    // LDA
+    lookup[0xA9] = (instruction){ "LDA", op_LDA, addr_IMM, 2, 2 };
+    lookup[0xA5] = (instruction){ "LDA", op_LDA, addr_ZPO, 2, 3 };
+    lookup[0xB5] = (instruction){ "LDA", op_LDA, addr_ZPX, 2, 4 };
+    lookup[0xAD] = (instruction){ "LDA", op_LDA, addr_ABS, 2, 4 };
+    lookup[0xBD] = (instruction){ "LDA", op_LDA, addr_ABX, 2, 4 };
+    lookup[0xB9] = (instruction){ "LDA", op_LDA, addr_ABY, 2, 4 };
+    lookup[0xA1] = (instruction){ "LDA", op_LDA, addr_IDX, 2, 6 };
+    lookup[0xB1] = (instruction){ "LDA", op_LDA, addr_IZY, 2, 5 };
+    // LDX
+    lookup[0xA2] = (instruction){ "LDX", op_LDX, addr_IMM, 2, 2 };
+    lookup[0xA6] = (instruction){ "LDX", op_LDX, addr_ZPO, 2, 3 };
+    lookup[0xB6] = (instruction){ "LDX", op_LDX, addr_ZPY, 2, 4 };
+    lookup[0xAE] = (instruction){ "LDX", op_LDX, addr_ABS, 2, 4 };
+    lookup[0xBE] = (instruction){ "LDX", op_LDX, addr_ABY, 2, 4 };
+    // LDY
+    lookup[0xA0] = (instruction){ "LDY", op_LDY, addr_IMM, 2, 2 };
+    lookup[0xA4] = (instruction){ "LDY", op_LDY, addr_ZPO, 2, 3 };
+    lookup[0xB4] = (instruction){ "LDY", op_LDY, addr_ZPX, 2, 4 };
+    lookup[0xAC] = (instruction){ "LDY", op_LDY, addr_ABS, 2, 4 };
+    lookup[0xBC] = (instruction){ "LDY", op_LDY, addr_ABX, 2, 4 };
+    // STA
+    lookup[0x85] = (instruction){ "STA", op_STA, addr_ZPO, 2, 3 };
+    lookup[0x95] = (instruction){ "STA", op_STA, addr_ZPX, 2, 4 };
+    lookup[0x8D] = (instruction){ "STA", op_STA, addr_ABS, 3, 4 };
+    lookup[0x9D] = (instruction){ "STA", op_STA, addr_ABX, 3, 5 };
+    lookup[0x99] = (instruction){ "STA", op_STA, addr_ABY, 3, 5 };
+    lookup[0x81] = (instruction){ "STA", op_STA, addr_IDX, 2, 6 };
+    lookup[0x91] = (instruction){ "STA", op_STA, addr_IZY, 2, 6 };
+    // STX
+    lookup[0x85] = (instruction){ "STX", op_STX, addr_ZPO, 2, 3 };
+    lookup[0x95] = (instruction){ "STX", op_STX, addr_ZPY, 2, 4 };
+    lookup[0x8D] = (instruction){ "STX", op_STX, addr_ABS, 3, 4 };
+    // STY
+    lookup[0x85] = (instruction){ "STY", op_STY, addr_ZPO, 2, 3 };
+    lookup[0x95] = (instruction){ "STY", op_STY, addr_ZPY, 2, 4 };
+    lookup[0x8D] = (instruction){ "STY", op_STY, addr_ABS, 3, 4 };
+    // TAX
+    lookup[0xAA] = (instruction){ "TAX", op_TAX, addr_IMP, 1, 2 };
+    // TAY
+    lookup[0xA8] = (instruction){ "TAY", op_TAY, addr_IMP, 1, 2 };
+    // TXA
+    lookup[0x8A] = (instruction){ "TXA", op_TXA, addr_IMP, 1, 2 };
+    // TYA
+    lookup[0x98] = (instruction){ "TYA", op_TYA, addr_IMP, 1, 2 };
+    // TSX
+    lookup[0xBA] = (instruction){ "TSX", op_TSX, addr_IMP, 1, 2 };
+    // TXS
+    lookup[0x9A] = (instruction){ "TXS", op_TXS, addr_IMP, 1, 2 };
+    // PHA
+    lookup[0x48] = (instruction){ "PHA", op_PHA, addr_IMP, 1, 3 };
+    // PLA
+    lookup[0x68] = (instruction){ "PLA", op_PLA, addr_IMP, 1, 4 };
+    // PHP
+    lookup[0x08] = (instruction){ "PHP", op_PHP, addr_IMP, 1, 3 };
+    // PLP
+    lookup[0x28] = (instruction){ "PLP", op_PLP, addr_IMP, 1, 4 };
+}
+
 

@@ -29,6 +29,7 @@ typedef struct {
 } instruction;
 
 extern instruction lookup[256];
+void init_lookup();
 
 uint8_t op_LDA(CPU *cpu);
 uint8_t op_LDX(CPU *cpu);
@@ -42,6 +43,10 @@ uint8_t op_TXA(CPU *cpu);
 uint8_t op_TYA(CPU *cpu);
 uint8_t op_TSX(CPU *cpu);
 uint8_t op_TXS(CPU *cpu);
+uint8_t op_PHA(CPU *cpu);
+uint8_t op_PLA(CPU *cpu);
+uint8_t op_PHP(CPU *cpu);
+uint8_t op_PLP(CPU *cpu);
 uint8_t op_NOOP(CPU *cpu);
 
 uint8_t addr_IMP(CPU *cpu);

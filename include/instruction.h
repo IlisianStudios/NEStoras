@@ -51,6 +51,9 @@ uint8_t op_ADC(CPU *cpu);
 uint8_t op_SBC(CPU *cpu);
 uint8_t op_AND(CPU *cpu);
 uint8_t op_ORA(CPU *cpu);
+uint8_t op_CMP(CPU *cpu);
+uint8_t op_CPX(CPU *cpu);
+uint8_t op_CPY(CPU *cpu);
 uint8_t op_EOR(CPU *cpu);
 uint8_t op_NOOP(CPU *cpu);
 

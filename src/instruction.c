@@ -130,6 +130,27 @@ uint8_t op_ORA(CPU *cpu) {
     return 1;
 }
 
+uint8_t op_CMP(CPU *cpu) {
+    const uint8_t result = cpu->a - cpu->addr_abs;
+    set_flag(cpu, FLAG_C, result & 0xFF);
+    update_nz(cpu, cpu->a);
+    return 1;
+}
+
+uint8_t op_CPX(CPU *cpu) {
+    const uint8_t result = cpu->x - cpu->addr_abs;
+    set_flag(cpu, FLAG_C, result & 0xFF);
+    update_nz(cpu, cpu->x);
+    return 1;
+}
+
+uint8_t op_CPY(CPU *cpu) {
+    const uint8_t result = cpu->y- cpu->addr_abs;
+    set_flag(cpu, FLAG_C, result & 0xFF);
+    update_nz(cpu, cpu->y);
+    return 1;
+}
+
 uint8_t op_EOR(CPU *cpu) {
     cpu->a ^= cpu->addr_abs;
     update_nz(cpu, cpu->a);
@@ -341,6 +362,16 @@ void init_lookup() {
     lookup[0x59] = (instruction){ "EOR", op_EOR, addr_ABY, 3, 4 };
     lookup[0x41] = (instruction){ "EOR", op_EOR, addr_IDX, 2, 6 };
     lookup[0x51] = (instruction){ "EOR", op_EOR, addr_IZY, 2, 5 };
+
+    lookup[0xD2] = (instruction){ "CMP", op_CMP, addr_ZPO, 2, 5 };
+
+    lookup[0xE0] = (instruction){ "CPX", op_CPX, addr_IMM, 2, 2 };
+    lookup[0xE4] = (instruction){ "CPX", op_CPX, addr_ZPO, 2, 3 };
+    lookup[0xEC] = (instruction){ "CPX", op_CPX, addr_ABS, 3, 4 };
+
+    lookup[0xC0] = (instruction){ "CPY", op_CPY, addr_IMM, 2, 2 };
+    lookup[0xC4] = (instruction){ "CPY", op_CPY, addr_ZPO, 2, 3 };
+    lookup[0xCC] = (instruction){ "CPY", op_CPY, addr_ABS, 3, 4 };
 
 }
 

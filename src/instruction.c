@@ -103,6 +103,21 @@ uint8_t op_PLP(CPU *cpu) {
     return 0;
 }
 
+uint8_t op_ADC(CPU *cpu) {
+    uint16_t const sum = cpu->a + cpu->addr_abs + get_flag(cpu, FLAG_C);
+
+    set_flag(cpu, FLAG_C, sum & 0xFF);
+    set_flag(cpu, FLAG_V, (~(cpu->a ^ cpu->addr_abs) & (cpu->a ^ sum)) & 0x80);
+    cpu->a = sum & 0xFF;
+    update_nz(cpu, cpu->a);
+    return 1;
+}
+
+uint8_t op_SBC(CPU *cpu) {
+    cpu->addr_abs = ~cpu->addr_abs;
+    return op_ADC(cpu);
+}
+
 uint8_t op_NOOP(CPU *cpu) {
     return 0;
 }
@@ -278,6 +293,10 @@ void init_lookup() {
     lookup[0x08] = (instruction){ "PHP", op_PHP, addr_IMP, 1, 3 };
     // PLP
     lookup[0x28] = (instruction){ "PLP", op_PLP, addr_IMP, 1, 4 };
+    // ALU
+    lookup[0x72] = (instruction){ "ADC", op_ADC, addr_ZPO, 2, 5 };
+    lookup[0xF2] = (instruction){ "SBC", op_SBC, addr_ZPO, 2, 5 };
+
 }
 
 

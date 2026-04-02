@@ -47,6 +47,8 @@ uint8_t op_PHA(CPU *cpu);
 uint8_t op_PLA(CPU *cpu);
 uint8_t op_PHP(CPU *cpu);
 uint8_t op_PLP(CPU *cpu);
+uint8_t op_ADC(CPU *cpu);
+uint8_t op_SBC(CPU *cpu);
 uint8_t op_NOOP(CPU *cpu);
 
 uint8_t addr_IMP(CPU *cpu);

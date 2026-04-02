@@ -37,16 +37,19 @@ uint8_t op_LDY(CPU *cpu);
 uint8_t op_STA(CPU *cpu);
 uint8_t op_STX(CPU *cpu);
 uint8_t op_STY(CPU *cpu);
+
 uint8_t op_TAX(CPU *cpu);
 uint8_t op_TAY(CPU *cpu);
 uint8_t op_TXA(CPU *cpu);
 uint8_t op_TYA(CPU *cpu);
 uint8_t op_TSX(CPU *cpu);
 uint8_t op_TXS(CPU *cpu);
+
 uint8_t op_PHA(CPU *cpu);
 uint8_t op_PLA(CPU *cpu);
 uint8_t op_PHP(CPU *cpu);
 uint8_t op_PLP(CPU *cpu);
+
 uint8_t op_ADC(CPU *cpu);
 uint8_t op_SBC(CPU *cpu);
 uint8_t op_AND(CPU *cpu);
@@ -55,6 +58,16 @@ uint8_t op_CMP(CPU *cpu);
 uint8_t op_CPX(CPU *cpu);
 uint8_t op_CPY(CPU *cpu);
 uint8_t op_EOR(CPU *cpu);
+
+uint8_t op_BCC(CPU *cpu);
+uint8_t op_BCS(CPU *cpu);
+uint8_t op_BEQ(CPU *cpu);
+uint8_t op_BNE(CPU *cpu);
+uint8_t op_BMI(CPU *cpu);
+uint8_t op_BPL(CPU *cpu);
+uint8_t op_BVC(CPU *cpu);
+uint8_t op_BVS(CPU *cpu);
+
 uint8_t op_NOOP(CPU *cpu);
 
 uint8_t addr_IMP(CPU *cpu);

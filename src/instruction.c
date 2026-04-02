@@ -16,6 +16,23 @@ static inline uint8_t stack_pop(CPU *cpu)
     return bus_read(0x0100 | cpu->sp);
 }
 
+static inline uint8_t branch(CPU *cpu, bool cond)
+{
+    if (cond)
+    {
+        cpu->cycles++;
+
+        uint16_t addr = cpu->pc + cpu->addr_rel;
+
+        if ((addr & 0xFF00) != (cpu->pc & 0xFF00))
+            cpu->cycles++;
+
+        cpu->pc = addr;
+    }
+
+    return 0;
+}
+
 uint8_t op_LDA(CPU *cpu) {
     cpu->a = bus_read(cpu->pc);
     set_flag(cpu, FLAG_Z, cpu->a);
@@ -141,20 +158,52 @@ uint8_t op_CPX(CPU *cpu) {
     const uint8_t result = cpu->x - cpu->addr_abs;
     set_flag(cpu, FLAG_C, result & 0xFF);
     update_nz(cpu, cpu->x);
-    return 1;
+    return 0;
 }
 
 uint8_t op_CPY(CPU *cpu) {
     const uint8_t result = cpu->y- cpu->addr_abs;
     set_flag(cpu, FLAG_C, result & 0xFF);
     update_nz(cpu, cpu->y);
-    return 1;
+    return 0;
 }
 
 uint8_t op_EOR(CPU *cpu) {
     cpu->a ^= cpu->addr_abs;
     update_nz(cpu, cpu->a);
     return 1;
+}
+
+uint8_t op_BCC(CPU *cpu) {
+    return branch(cpu, !get_flag(cpu, FLAG_C));
+}
+
+uint8_t op_BCS(CPU *cpu) {
+    return branch(cpu, get_flag(cpu, FLAG_C));
+}
+
+uint8_t op_BEQ(CPU *cpu) {
+    return branch(cpu, get_flag(cpu, FLAG_Z));
+}
+
+uint8_t op_BNE(CPU *cpu) {
+    return branch(cpu, !get_flag(cpu, FLAG_Z));
+}
+
+uint8_t op_BMI(CPU *cpu) {
+    return branch(cpu, get_flag(cpu, FLAG_N));
+}
+
+uint8_t op_BPL(CPU *cpu) {
+    return branch(cpu, !get_flag(cpu, FLAG_N));
+}
+
+uint8_t op_BVC(CPU *cpu) {
+    return branch(cpu, !get_flag(cpu, FLAG_V));
+}
+
+uint8_t op_BVS(CPU *cpu) {
+    return branch(cpu, get_flag(cpu, FLAG_V));
 }
 
 uint8_t op_NOOP(CPU *cpu) {
@@ -372,6 +421,15 @@ void init_lookup() {
     lookup[0xC0] = (instruction){ "CPY", op_CPY, addr_IMM, 2, 2 };
     lookup[0xC4] = (instruction){ "CPY", op_CPY, addr_ZPO, 2, 3 };
     lookup[0xCC] = (instruction){ "CPY", op_CPY, addr_ABS, 3, 4 };
+    // Branching
+    lookup[0x90] = (instruction){ "BCC", op_BCC, addr_REL, 2, 2 };
+    lookup[0xB0] = (instruction){ "BCS", op_BCS, addr_REL, 2, 2 };
+    lookup[0xF0] = (instruction){ "BEQ", op_BEQ, addr_REL, 2, 2 };
+    lookup[0xD0] = (instruction){ "BNE", op_BNE, addr_REL, 2, 2 };
+    lookup[0x30] = (instruction){ "BMI", op_BMI, addr_REL, 2, 2 };
+    lookup[0x10] = (instruction){ "BPL", op_BPL, addr_REL, 2, 2 };
+    lookup[0x50] = (instruction){ "BVC", op_BVC, addr_REL, 2, 2 };
+    lookup[0x70] = (instruction){ "BVS", op_BVS, addr_REL, 2, 2 };
 
 }
 

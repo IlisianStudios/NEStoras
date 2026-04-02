@@ -36,6 +36,12 @@ uint8_t op_LDY(CPU *cpu);
 uint8_t op_STA(CPU *cpu);
 uint8_t op_STX(CPU *cpu);
 uint8_t op_STY(CPU *cpu);
+uint8_t op_TAX(CPU *cpu);
+uint8_t op_TAY(CPU *cpu);
+uint8_t op_TXA(CPU *cpu);
+uint8_t op_TYA(CPU *cpu);
+uint8_t op_TSX(CPU *cpu);
+uint8_t op_TXS(CPU *cpu);
 uint8_t op_NOOP(CPU *cpu);
 
 uint8_t addr_IMP(CPU *cpu);

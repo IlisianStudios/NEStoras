@@ -33,6 +33,41 @@ uint8_t op_STY(CPU *cpu) {
     return 0;
 }
 
+uint8_t op_TAX(CPU *cpu) {
+    cpu->x = cpu->a;
+    update_nz(cpu, cpu->x);
+    return 0;
+}
+
+uint8_t op_TAY(CPU *cpu) {
+    cpu->y = cpu->a;
+    update_nz(cpu, cpu->y);
+    return 0;
+}
+
+uint8_t op_TXA(CPU *cpu) {
+    cpu->a = cpu->x;
+    update_nz(cpu, cpu->a);
+    return 0;
+}
+
+uint8_t op_TYA(CPU *cpu) {
+    cpu->a = cpu->y;
+    update_nz(cpu, cpu->a);
+    return 0;
+}
+
+uint8_t op_TSX(CPU *cpu) {
+    cpu->x = cpu->sp;
+    update_nz(cpu, cpu->x);
+    return 0;
+}
+
+uint8_t op_TXS(CPU *cpu) {
+    cpu->sp = cpu->x;
+    return 0;
+}
+
 uint8_t op_NOOP(CPU *cpu) {
     return 0;
 }

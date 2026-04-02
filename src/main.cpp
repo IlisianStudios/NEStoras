@@ -47,6 +47,18 @@ void init_lookup() {
     lookup[0x85] = (instruction){ "STY", op_STY, addr_ZPO, 2, 3 };
     lookup[0x95] = (instruction){ "STY", op_STY, addr_ZPY, 2, 4 };
     lookup[0x8D] = (instruction){ "STY", op_STY, addr_ABS, 3, 4 };
+    // TAX
+    lookup[0xAA] = (instruction){ "TAX", op_TAX, addr_IMP, 1, 2 };
+    // TAY
+    lookup[0xA8] = (instruction){ "TAY", op_TAY, addr_IMP, 1, 2 };
+    // TXA
+    lookup[0x8A] = (instruction){ "TXA", op_TXA, addr_IMP, 1, 2 };
+    // TYA
+    lookup[0x98] = (instruction){ "TYA", op_TYA, addr_IMP, 1, 2 };
+    // TSX
+    lookup[0xBA] = (instruction){ "TSX", op_TSX, addr_IMP, 1, 2 };
+    // TXS
+    lookup[0x9A] = (instruction){ "TXS", op_TXS, addr_IMP, 1, 2 };
 }
 
 void init() {

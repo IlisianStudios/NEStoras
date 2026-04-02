@@ -49,6 +49,9 @@ uint8_t op_PHP(CPU *cpu);
 uint8_t op_PLP(CPU *cpu);
 uint8_t op_ADC(CPU *cpu);
 uint8_t op_SBC(CPU *cpu);
+uint8_t op_AND(CPU *cpu);
+uint8_t op_ORA(CPU *cpu);
+uint8_t op_EOR(CPU *cpu);
 uint8_t op_NOOP(CPU *cpu);
 
 uint8_t addr_IMP(CPU *cpu);

@@ -118,6 +118,24 @@ uint8_t op_SBC(CPU *cpu) {
     return op_ADC(cpu);
 }
 
+uint8_t op_AND(CPU *cpu) {
+    cpu->a &= cpu->addr_abs;
+    update_nz(cpu, cpu->a);
+    return 1;
+}
+
+uint8_t op_ORA(CPU *cpu) {
+    cpu->a |= cpu->addr_abs;
+    update_nz(cpu, cpu->a);
+    return 1;
+}
+
+uint8_t op_EOR(CPU *cpu) {
+    cpu->a ^= cpu->addr_abs;
+    update_nz(cpu, cpu->a);
+    return 1;
+}
+
 uint8_t op_NOOP(CPU *cpu) {
     return 0;
 }
@@ -296,6 +314,33 @@ void init_lookup() {
     // ALU
     lookup[0x72] = (instruction){ "ADC", op_ADC, addr_ZPO, 2, 5 };
     lookup[0xF2] = (instruction){ "SBC", op_SBC, addr_ZPO, 2, 5 };
+
+    lookup[0x29] = (instruction){ "AND", op_AND, addr_IMM, 2, 2 };
+    lookup[0x25] = (instruction){ "AND", op_AND, addr_ZPO, 2, 3 };
+    lookup[0x35] = (instruction){ "AND", op_AND, addr_ZPX, 2, 4 };
+    lookup[0x3D] = (instruction){ "AND", op_AND, addr_ABX, 3, 4 };
+    lookup[0x2D] = (instruction){ "AND", op_AND, addr_ABS, 3, 4 };
+    lookup[0x39] = (instruction){ "AND", op_AND, addr_ABY, 3, 4 };
+    lookup[0x21] = (instruction){ "AND", op_AND, addr_IDX, 2, 6 };
+    lookup[0x31] = (instruction){ "AND", op_AND, addr_IZY, 2, 5 };
+
+    lookup[0x09] = (instruction){ "ORA", op_ORA, addr_IMM, 2, 2 };
+    lookup[0x05] = (instruction){ "ORA", op_ORA, addr_ZPO, 2, 3 };
+    lookup[0x15] = (instruction){ "ORA", op_ORA, addr_ZPX, 2, 4 };
+    lookup[0x0D] = (instruction){ "ORA", op_ORA, addr_ABS, 3, 4 };
+    lookup[0x1D] = (instruction){ "ORA", op_ORA, addr_ABX, 3, 4 };
+    lookup[0x19] = (instruction){ "ORA", op_ORA, addr_ABY, 3, 4 };
+    lookup[0x01] = (instruction){ "ORA", op_ORA, addr_IDX, 2, 6 };
+    lookup[0x11] = (instruction){ "ORA", op_ORA, addr_IZY, 2, 5 };
+
+    lookup[0x49] = (instruction){ "EOR", op_EOR, addr_IMM, 2, 2 };
+    lookup[0x45] = (instruction){ "EOR", op_EOR, addr_ZPO, 2, 3 };
+    lookup[0x55] = (instruction){ "EOR", op_EOR, addr_ZPX, 2, 4 };
+    lookup[0x4D] = (instruction){ "EOR", op_EOR, addr_ABS, 3, 4 };
+    lookup[0x5D] = (instruction){ "EOR", op_EOR, addr_ABX, 3, 4 };
+    lookup[0x59] = (instruction){ "EOR", op_EOR, addr_ABY, 3, 4 };
+    lookup[0x41] = (instruction){ "EOR", op_EOR, addr_IDX, 2, 6 };
+    lookup[0x51] = (instruction){ "EOR", op_EOR, addr_IZY, 2, 5 };
 
 }
 

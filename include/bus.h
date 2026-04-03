@@ -1,17 +1,22 @@
 #pragma once
 #include <stdint.h>
-
+#ifdef __cplusplus
+extern "C" {
+#endif
 extern uint8_t ram[2048];
 
 static inline uint8_t apu_io_read(uint16_t addr) {
+    (void) addr;
     return 0x00;
 }
 
 static inline uint8_t ppu_register_read(uint16_t addr) {
+    (void) addr;
     return 0x00;
 }
 
 static inline uint8_t cartrige_read(uint16_t addr) {
+    (void) addr;
     return 0x00;
 }
 
@@ -46,3 +51,7 @@ static inline void bus_write(const uint16_t addr, const uint8_t data) {
     }
     cartrige_write(addr, data);
 }
+
+#ifdef __cplusplus
+}
+#endif

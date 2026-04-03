@@ -4,18 +4,6 @@
 #include "../include/cpu.h"
 #include "../include/instruction.h"
 
-static inline void stack_push(CPU *cpu, uint8_t value)
-{
-    bus_write(0x0100 | cpu->sp, value);
-    cpu->sp--;
-}
-
-static inline uint8_t stack_pop(CPU *cpu)
-{
-    cpu->sp++;
-    return bus_read(0x0100 | cpu->sp);
-}
-
 static inline uint8_t branch(CPU *cpu, const bool cond)
 {
     if (cond)

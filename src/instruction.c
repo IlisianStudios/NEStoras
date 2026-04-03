@@ -343,6 +343,53 @@ uint8_t op_DEC(CPU *cpu) {
     return 0;
 }
 
+uint8_t op_CLC(CPU *cpu) {
+    set_flag(cpu, FLAG_C, false);
+    return 0;
+}
+
+uint8_t op_SEC(CPU *cpu) {
+    set_flag(cpu, FLAG_C, true);
+    return 0;
+}
+
+uint8_t op_CLI(CPU *cpu) {
+    set_flag(cpu, FLAG_I, false);
+    return 0;
+}
+
+uint8_t op_SEI(CPU *cpu) {
+    set_flag(cpu, FLAG_I, true);
+    return 0;
+}
+
+uint8_t op_CLV(CPU *cpu) {
+    set_flag(cpu, FLAG_V, false);
+    return 0;
+}
+
+uint8_t op_CLD(CPU *cpu) {
+    set_flag(cpu, FLAG_D, false);
+    return 0;
+}
+
+uint8_t op_SED(CPU *cpu) {
+    set_flag(cpu, FLAG_D, true);
+    return 0;
+}
+
+uint8_t op_BIT(CPU *cpu) {
+    const uint8_t value = bus_read(cpu->addr_abs);
+
+    const uint8_t result = cpu->a & value;
+
+    set_flag(cpu, FLAG_Z, result == 0);
+    set_flag(cpu, FLAG_N, value & 0x80);
+    set_flag(cpu, FLAG_V, value & 0x40);
+
+    return 0;
+}
+
 uint8_t op_NOOP(CPU *cpu) {
     return 0;
 }
@@ -616,6 +663,20 @@ void init_lookup() {
     lookup[0xD6] = (instruction){ "DEC", op_DEC, addr_ZPX, 2, 6 };
     lookup[0xCE] = (instruction){ "DEC", op_DEC, addr_ABS, 3, 6 };
     lookup[0xDE] = (instruction){ "DEC", op_DEC, addr_ABX, 3, 7 };
+
+    lookup[0x18] = (instruction){ "CLC", op_CLC, addr_IMP, 1, 2 };
+    lookup[0x38] = (instruction){ "SEC", op_SEC, addr_IMP, 1, 2 };
+    lookup[0x58] = (instruction){ "CLI", op_CLI, addr_IMP, 1, 2 };
+    lookup[0x71] = (instruction){ "SEI", op_SEI, addr_IMP, 1, 2 };
+    lookup[0xB8] = (instruction){ "CLV", op_CLV, addr_IMP, 1, 2 };
+    lookup[0xD8] = (instruction){ "CLD", op_CLD, addr_IMP, 1, 2 };
+    lookup[0xF8] = (instruction){ "SED", op_SED, addr_IMP, 1, 2 };
+
+    lookup[0x89] = (instruction){ "BIT", op_BIT, addr_IMM, 2, 2 };
+    lookup[0x24] = (instruction){ "BIT", op_BIT, addr_ZPO, 2, 3 };
+    lookup[0x34] = (instruction){ "BIT", op_BIT, addr_ZPX, 2, 4 };
+    lookup[0x2C] = (instruction){ "BIT", op_BIT, addr_ABS, 3, 4 };
+    lookup[0x3C] = (instruction){ "BIT", op_BIT, addr_ABX, 3, 4 };
 
 
 

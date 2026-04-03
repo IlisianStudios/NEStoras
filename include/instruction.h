@@ -68,9 +68,15 @@ uint8_t op_BPL(CPU *cpu);
 uint8_t op_BVC(CPU *cpu);
 uint8_t op_BVS(CPU *cpu);
 
+uint8_t op_ASL(CPU *cpu);
+uint8_t op_LSR(CPU *cpu);
+uint8_t op_ROL(CPU *cpu);
+uint8_t op_ROR(CPU *cpu);
+
 uint8_t op_NOOP(CPU *cpu);
 
 uint8_t addr_IMP(CPU *cpu);
+uint8_t addr_ACC(CPU *cpu);
 uint8_t addr_IMM(CPU *cpu);
 uint8_t addr_ZPO(CPU *cpu);
 uint8_t addr_ZPX(CPU *cpu);

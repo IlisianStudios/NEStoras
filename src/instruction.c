@@ -16,13 +16,13 @@ static inline uint8_t stack_pop(CPU *cpu)
     return bus_read(0x0100 | cpu->sp);
 }
 
-static inline uint8_t branch(CPU *cpu, bool cond)
+static inline uint8_t branch(CPU *cpu, const bool cond)
 {
     if (cond)
     {
         cpu->cycles++;
 
-        uint16_t addr = cpu->pc + cpu->addr_rel;
+        const uint16_t addr = cpu->pc + cpu->addr_rel;
 
         if ((addr & 0xFF00) != (cpu->pc & 0xFF00))
             cpu->cycles++;
@@ -31,6 +31,20 @@ static inline uint8_t branch(CPU *cpu, bool cond)
     }
 
     return 0;
+}
+
+static inline uint16_t sr_helper_read(const CPU *cpu, const bool cond) {
+    if (cond)
+        return  cpu->a;
+    return bus_read(cpu->addr_abs);
+}
+
+static inline void sr_helper_write(CPU *cpu, const bool cond, uint8_t data) {
+    if (cond) {
+        cpu->a = data;;
+    } else {
+        bus_write(cpu->addr_abs, data);
+    }
 }
 
 uint8_t op_LDA(CPU *cpu) {
@@ -206,11 +220,70 @@ uint8_t op_BVS(CPU *cpu) {
     return branch(cpu, get_flag(cpu, FLAG_V));
 }
 
+uint8_t op_ASL(CPU *cpu) {
+
+    const bool cond = lookup[cpu->fetched].addrmode == addr_ACC;
+    uint16_t temp = sr_helper_read(cpu, cond);
+
+    set_flag(cpu, FLAG_C, temp & 0xFF00);
+    temp = temp << 1;
+    update_nz(cpu, temp & 0xFF);
+
+    sr_helper_write(cpu, cond, temp);
+    return 0;
+}
+
+uint8_t op_LSR(CPU *cpu) {
+    const bool cond = lookup[cpu->fetched].addrmode == addr_ACC;
+    uint16_t temp = sr_helper_read(cpu, cond);
+
+    set_flag(cpu, FLAG_C, temp & 0x01);
+    temp = temp >> 1;
+    update_nz(cpu, temp & 0xFF);
+
+    sr_helper_write(cpu, cond, temp);
+    return 0;
+}
+
+uint8_t op_ROL(CPU *cpu) {
+    const bool cond = lookup[cpu->fetched].addrmode == addr_ACC;
+    uint16_t temp = sr_helper_read(cpu, cond);
+
+    uint8_t const old_c = get_flag(cpu, FLAG_C);
+    set_flag(cpu, FLAG_C, temp & 0x80);
+
+    temp = (temp << 1) | old_c;
+    update_nz(cpu, temp & 0xFF);
+
+    sr_helper_write(cpu, cond, temp);
+    return 0;
+}
+
+uint8_t op_ROR(CPU *cpu) {
+    const bool cond = lookup[cpu->fetched].addrmode == addr_ACC;
+    uint16_t temp = sr_helper_read(cpu, cond);
+
+    uint8_t old_c = get_flag(cpu, FLAG_C);
+    set_flag(cpu, FLAG_C, temp & 0x01);
+
+    old_c = old_c << 7;
+    temp = (temp >> 1) | old_c;
+    update_nz(cpu, temp & 0xFF);
+
+    sr_helper_write(cpu, cond, temp);
+    return 0;
+}
+
 uint8_t op_NOOP(CPU *cpu) {
     return 0;
 }
 
 uint8_t addr_IMP(CPU *cpu) {
+    cpu->fetched = cpu->a;
+    return 0;
+}
+
+uint8_t addr_ACC(CPU *cpu) {
     cpu->fetched = cpu->a;
     return 0;
 }
@@ -430,6 +503,31 @@ void init_lookup() {
     lookup[0x10] = (instruction){ "BPL", op_BPL, addr_REL, 2, 2 };
     lookup[0x50] = (instruction){ "BVC", op_BVC, addr_REL, 2, 2 };
     lookup[0x70] = (instruction){ "BVS", op_BVS, addr_REL, 2, 2 };
+    // SHIFTS AND ROTATES
+    lookup[0x0A] = (instruction){ "ASL", op_ASL, addr_ACC, 1, 2 };
+    lookup[0x06] = (instruction){ "ASL", op_ASL, addr_ZPO, 2, 5 };
+    lookup[0x16] = (instruction){ "ASL", op_ASL, addr_ZPX, 2, 6 };
+    lookup[0x0E] = (instruction){ "ASL", op_ASL, addr_ABS, 3, 6 };
+    lookup[0x1E] = (instruction){ "ASL", op_ASL, addr_ABX, 3, 7 };
+
+    lookup[0x4A] = (instruction){ "LSR", op_LSR, addr_ACC, 1, 2 };
+    lookup[0x46] = (instruction){ "LSR", op_LSR, addr_ZPO, 2, 5 };
+    lookup[0x56] = (instruction){ "LSR", op_LSR, addr_ZPX, 2, 6 };
+    lookup[0x4E] = (instruction){ "LSR", op_LSR, addr_ABS, 3, 6 };
+    lookup[0x5E] = (instruction){ "LSR", op_LSR, addr_ABX, 3, 7 };
+
+    lookup[0x2A] = (instruction){ "ROL", op_ROL, addr_ACC, 1, 2 };
+    lookup[0x26] = (instruction){ "ROL", op_ROL, addr_ZPO, 2, 5 };
+    lookup[0x36] = (instruction){ "ROL", op_ROL, addr_ZPX, 2, 6 };
+    lookup[0x2E] = (instruction){ "ROL", op_ROL, addr_ABS, 3, 6 };
+    lookup[0x3E] = (instruction){ "ROL", op_ROL, addr_ABX, 3, 7 };
+
+    lookup[0x6A] = (instruction){ "ROR", op_ROR, addr_ACC, 1, 2 };
+    lookup[0x66] = (instruction){ "ROR", op_ROR, addr_ZPO, 2, 5 };
+    lookup[0x76] = (instruction){ "ROR", op_ROR, addr_ZPX, 2, 6 };
+    lookup[0x6E] = (instruction){ "ROR", op_ROR, addr_ABS, 3, 6 };
+    lookup[0x7E] = (instruction){ "ROR", op_ROR, addr_ABX, 3, 7 };
+
 
 }
 

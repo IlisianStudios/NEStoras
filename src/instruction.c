@@ -274,6 +274,57 @@ uint8_t op_ROR(CPU *cpu) {
     return 0;
 }
 
+uint8_t op_JMP(CPU *cpu) {
+    cpu->a = cpu->addr_abs;
+    return 0;
+}
+
+uint8_t op_JSR(CPU *cpu) {
+    cpu->pc--;
+
+    stack_push(cpu, (cpu->pc >> 8) & 0xFF);
+    stack_push(cpu, (cpu->pc & 0xFF));
+
+    cpu->pc = cpu->addr_abs;
+    return 0;
+}
+
+uint8_t op_RTS(CPU *cpu) {
+    const uint8_t lo = stack_pop(cpu);
+    const uint8_t hi = stack_pop(cpu);
+
+    cpu->pc = (hi << 8) | lo;
+    cpu->pc++;
+    return 0;
+}
+
+uint8_t op_RTI(CPU *cpu) {
+    cpu->status = stack_pop(cpu);
+
+    const uint16_t lo = stack_pop(cpu);
+    const uint16_t hi = stack_pop(cpu);
+
+    cpu->pc = (hi << 8) | lo;
+    return 0;
+}
+
+uint8_t op_BRK(CPU *cpu) {
+    cpu->pc++;
+
+    stack_push(cpu, (cpu->pc >> 8) & 0xFF);
+    stack_push(cpu, cpu->pc & 0xFF);
+
+    set_flag(cpu, FLAG_B, true);
+    stack_push(cpu, cpu->status);
+    set_flag(cpu, FLAG_I, true);
+
+    uint16_t lo = bus_read(0xFFFE);
+    uint16_t hi = bus_read(0xFFFF);
+
+    cpu->pc = (hi << 8) | lo;
+    return 0;
+}
+
 uint8_t op_NOOP(CPU *cpu) {
     return 0;
 }
@@ -527,6 +578,15 @@ void init_lookup() {
     lookup[0x76] = (instruction){ "ROR", op_ROR, addr_ZPX, 2, 6 };
     lookup[0x6E] = (instruction){ "ROR", op_ROR, addr_ABS, 3, 6 };
     lookup[0x7E] = (instruction){ "ROR", op_ROR, addr_ABX, 3, 7 };
+    // CONtROL
+    lookup[0x4C] = (instruction){ "JMP", op_JMP, addr_ABS, 3, 3 };
+    lookup[0x6C] = (instruction){ "JMP", op_JMP, addr_IND, 3, 5 };
+
+    lookup[0x20] = (instruction){ "JSR", op_JSR, addr_ABS, 3, 6 };
+    lookup[0x60] = (instruction){ "RTS", op_RTS, addr_IMP, 1, 6 };
+    lookup[0x40] = (instruction){ "RTI", op_RTI, addr_IMP, 1, 6 };
+    lookup[0x00] = (instruction){ "BRK", op_BRK, addr_IMP, 1, 7 };
+
 
 
 }

@@ -49,6 +49,13 @@ uint8_t op_LDX(CPU *cpu) {
     return 1; // This instruction allows extra cycle
 }
 
+uint8_t op_LDY(CPU *cpu) {
+    cpu->y = bus_read(cpu->pc);
+    set_flag(cpu, FLAG_Z, cpu->a);
+    set_flag(cpu, FLAG_N, cpu->a);
+    return 1; // This instruction allows extra cycle
+}
+
 uint8_t op_STA(CPU *cpu) {
     bus_write(cpu->addr_abs, cpu->a);
     return 0;

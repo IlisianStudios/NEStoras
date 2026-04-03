@@ -1,6 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include <stdbool.h>
+#include "bus.h"
 
 // Flag bit positions
 #define FLAG_C 0x01  // Carry

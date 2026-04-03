@@ -78,6 +78,8 @@ uint8_t op_JSR(CPU *cpu);
 uint8_t op_RTS(CPU *cpu);
 uint8_t op_RTI(CPU *cpu);
 uint8_t op_BRK(CPU *cpu);
+uint8_t op_INC(CPU *cpu);
+uint8_t op_DEC(CPU *cpu);
 
 
 uint8_t op_NOOP(CPU *cpu);

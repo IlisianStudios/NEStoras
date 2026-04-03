@@ -41,7 +41,7 @@ static inline uint16_t sr_helper_read(const CPU *cpu, const bool cond) {
 
 static inline void sr_helper_write(CPU *cpu, const bool cond, uint8_t data) {
     if (cond) {
-        cpu->a = data;;
+        cpu->a = data;
     } else {
         bus_write(cpu->addr_abs, data);
     }
@@ -325,6 +325,24 @@ uint8_t op_BRK(CPU *cpu) {
     return 0;
 }
 
+uint8_t op_INC(CPU *cpu) {
+    const bool cond = lookup[cpu->fetched].addrmode == addr_ACC;
+    const uint16_t v = sr_helper_read(cpu, cond) + 1;
+    sr_helper_write(cpu, cond, v);
+    update_nz(cpu, v);
+
+    return 0;
+}
+
+uint8_t op_DEC(CPU *cpu) {
+    const bool cond = lookup[cpu->fetched].addrmode == addr_ACC;
+    const uint16_t v = sr_helper_read(cpu, cond) - 1;
+    sr_helper_write(cpu, cond, v);
+    update_nz(cpu, v);
+
+    return 0;
+}
+
 uint8_t op_NOOP(CPU *cpu) {
     return 0;
 }
@@ -586,6 +604,21 @@ void init_lookup() {
     lookup[0x60] = (instruction){ "RTS", op_RTS, addr_IMP, 1, 6 };
     lookup[0x40] = (instruction){ "RTI", op_RTI, addr_IMP, 1, 6 };
     lookup[0x00] = (instruction){ "BRK", op_BRK, addr_IMP, 1, 7 };
+
+    lookup[0x1A] = (instruction){ "INC", op_INC, addr_ACC, 1, 2 };
+    lookup[0xE6] = (instruction){ "INC", op_INC, addr_ZPO, 2, 5 };
+    lookup[0xF6] = (instruction){ "INC", op_INC, addr_ZPX, 2, 6 };
+    lookup[0xEE] = (instruction){ "INC", op_INC, addr_ABS, 3, 6 };
+    lookup[0xFE] = (instruction){ "INC", op_INC, addr_ABX, 3, 7 };
+
+    lookup[0x3A] = (instruction){ "DEC", op_DEC, addr_ACC, 1, 2 };
+    lookup[0xC6] = (instruction){ "DEC", op_DEC, addr_ZPO, 2, 5 };
+    lookup[0xD6] = (instruction){ "DEC", op_DEC, addr_ZPX, 2, 6 };
+    lookup[0xCE] = (instruction){ "DEC", op_DEC, addr_ABS, 3, 6 };
+    lookup[0xDE] = (instruction){ "DEC", op_DEC, addr_ABX, 3, 7 };
+
+
+
 
 
 

@@ -18,6 +18,7 @@ add_executable(NEStoras
     src/bus.c
         include/instruction.h
         src/instruction.c
+        src/cartridge.c
 )
 
 target_include_directories(NEStoras PRIVATE

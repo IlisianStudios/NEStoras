@@ -17,6 +17,41 @@ void cpu_reset(CPU *cpu){
     cpu->cycles = 0;
 }
 
+
+// non-maskable interrupt
+void cpu_nmi(CPU *cpu){
+    // pushes pc to stack
+    stack_push(cpu, (cpu->pc >> 8) & 0xFF); // high byte
+    stack_push(cpu, (cpu->pc & 0xFF)); // low byte
+    // pushes flags to stack, forces U=1 (always 1 but forces it anyway), B=0 ONLY IN STACK
+    // technically unneeded to force but 6502 does that so whatever 
+    stack_push(cpu, (cpu->status | FLAG_U) & ~FLAG_B);
+
+    set_flag(cpu,FLAG_I,1); // disables further interrupts (since already in interrupt handling)
+
+    // read from NMI vector
+    uint8_t lo = bus_read(0xFFFA); // low byte
+    uint8_t hi = bus_read(0xFFFB); // high byte
+    // loads program counter with NMI handler 
+    cpu->pc = (hi << 8) | lo;
+}
+
+// interrupt request
+void cpu_irq(CPU *cpu){
+    if (get_flag(cpu,FLAG_I)) return; // interrupts disabled
+
+    // same as NMI
+    stack_push(cpu, (cpu->pc >> 8) & 0xFF); // high byte
+    stack_push(cpu, (cpu->pc & 0xFF)); // low byte
+    stack_push(cpu, (cpu->status | FLAG_U) & ~FLAG_B);
+
+    set_flag(cpu, FLAG_I, true);
+
+    uint8_t lo = bus_read(0xFFFE);
+    uint8_t hi = bus_read(0xFFFF);
+    cpu->pc = (hi << 8) | lo;
+}
+
 void fetch(CPU *cpu) {
     const uint8_t opcode = bus_read(advance_pc(cpu));
     cpu->fetched = opcode;

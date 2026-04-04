@@ -58,6 +58,7 @@ void handle_event_type(const SDL_Event *event) {
         }
         case SDL_DROPFILE: {
             std::printf("Dropping file: %s\n", event->drop.file);
+            try_free_cartridge();
             // User dropped a file
             cartridge =  static_cast<Cartridge *>(malloc(sizeof(Cartridge)));
             if (!cartridge_load(cartridge, event->drop.file)) {
@@ -66,8 +67,14 @@ void handle_event_type(const SDL_Event *event) {
             }
             else {
                 cpu_reset(&cpu);
-                cpu.testing_mode = true;
+                const char *filename = strrchr(event->drop.file, '/');
+                filename = filename ? filename + 1 : event->drop.file;
+                if (strcmp(filename, "nestest.nes") == 0) {
+                    cpu.pc = 0xC000;
+                    cpu.testing_mode = true;
+                }
             }
+            SDL_free(event->drop.file);
             break;
         }
         default:break;

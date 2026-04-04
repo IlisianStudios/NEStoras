@@ -26,7 +26,7 @@ typedef struct{
     uint8_t status;
 
     uint8_t cycles;
-    uint16_t total_cycles;
+    uint64_t total_cycles;
 
     uint16_t addr_abs;
     uint16_t addr_rel;

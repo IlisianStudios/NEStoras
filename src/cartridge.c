@@ -45,13 +45,11 @@ bool cartridge_load(Cartridge *cart, const char* path) {
     if (header[6] & 0x04) fseek(f, 512, SEEK_CUR);
 
     cart->prg_rom = malloc(cart->prg_size);
-    cart->chr_rom = malloc(cart->chr_size);
 
     if (cart->chr_size == 0)
-        cart->chr_rom = (uint8_t*)malloc(8192);
-    else {
+        cart->chr_rom = malloc(8192);
+    else
         cart->chr_rom = malloc(cart->chr_size);
-    }
 
     add_mapper(cart);
     fread(cart->prg_rom, 1, cart->prg_size, f);

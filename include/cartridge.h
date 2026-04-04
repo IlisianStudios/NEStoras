@@ -31,8 +31,9 @@ struct Cartridge{
 
 extern Cartridge *cartridge;
 
-bool cartridge_load(Cartridge *cartridge, const char* path);
-void cartridge_free(Cartridge *cart);
+bool cartridge_load(const char* path);
+void cartridge_free();
+void try_free_cartridge();
 
 #ifdef __cplusplus
 }

@@ -10,6 +10,18 @@ bool running = true;
 CPU cpu;
 // in main.cpp
 
+void debug_nestest() {
+    printf("DEBUG mode enabled\n");
+    if(!cartridge_load("nestest.log"))return;
+    printf("Nestest loaded successfully\n");
+    cpu_reset(&cpu);
+
+    cpu.pc = 0xC000;
+    cpu.testing_mode = true;
+    cpu.nestest_comp = true;
+    printf("Nestest cpu set proper\n");
+}
+
 void init() {
     init_lookup();
     cartridge = nullptr;
@@ -41,14 +53,6 @@ SDL_Window* setup_window() {
     return window;
 }
 
-
-void try_free_cartridge() {
-    if (cartridge != nullptr) {
-        cartridge_free(cartridge);
-        cartridge = nullptr;
-    }
-}
-
 void handle_event_type(const SDL_Event *event) {
     switch (event->type) {
         case SDL_QUIT: {
@@ -58,21 +62,16 @@ void handle_event_type(const SDL_Event *event) {
         }
         case SDL_DROPFILE: {
             std::printf("Dropping file: %s\n", event->drop.file);
-            try_free_cartridge();
             // User dropped a file
-            cartridge =  static_cast<Cartridge *>(malloc(sizeof(Cartridge)));
-            if (!cartridge_load(cartridge, event->drop.file)) {
-                free(cartridge);
-                cartridge = nullptr;
-            }
-            else {
-                cpu_reset(&cpu);
-                const char *filename = strrchr(event->drop.file, '/');
-                filename = filename ? filename + 1 : event->drop.file;
-                if (strcmp(filename, "nestest.nes") == 0) {
-                    cpu.pc = 0xC000;
-                    cpu.testing_mode = true;
-                }
+            if (!cartridge_load(event->drop.file))
+                return;
+
+            cpu_reset(&cpu);
+            const char *filename = strrchr(event->drop.file, '/');
+            filename = filename ? filename + 1 : event->drop.file;
+            if (strcmp(filename, "nestest.nes") == 0) {
+                cpu.pc = 0xC000;
+                cpu.testing_mode = true;
             }
             SDL_free(event->drop.file);
             break;
@@ -102,6 +101,10 @@ int main(int argc, char** argv) {
 
     init();
     SDL_Window* window = setup_window();
+
+#ifndef NDEBUG
+    debug_nestest();
+#endif
 
 
     while (running) {

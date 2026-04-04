@@ -122,56 +122,62 @@ uint8_t op_PLP(CPU *cpu) {
     return 0;
 }
 
-uint8_t op_ADC(CPU *cpu) {
-    uint16_t const sum = cpu->a + cpu->addr_abs + get_flag(cpu, FLAG_C);
+static inline uint8_t adc_impl(CPU *cpu, uint8_t value) {
+    const uint16_t sum = cpu->a + value + get_flag(cpu, FLAG_C);
 
-    set_flag(cpu, FLAG_C, sum & 0xFF);
-    set_flag(cpu, FLAG_V, (~(cpu->a ^ cpu->addr_abs) & (cpu->a ^ sum)) & 0x80);
+    set_flag(cpu, FLAG_C, sum > 0xFF);
+    set_flag(cpu, FLAG_V, (~(cpu->a ^ value) & (cpu->a ^ sum)) & 0x80);
     cpu->a = sum & 0xFF;
     update_nz(cpu, cpu->a);
     return 1;
 }
 
+uint8_t op_ADC(CPU *cpu) {
+    return adc_impl(cpu, bus_read(cpu->addr_abs));
+}
+
 uint8_t op_SBC(CPU *cpu) {
-    cpu->addr_abs = ~cpu->addr_abs;
-    return op_ADC(cpu);
+    return adc_impl(cpu, ~bus_read(cpu->addr_abs));
 }
 
 uint8_t op_AND(CPU *cpu) {
-    cpu->a &= cpu->addr_abs;
+    cpu->a &= bus_read(cpu->addr_abs);
     update_nz(cpu, cpu->a);
     return 1;
 }
 
 uint8_t op_ORA(CPU *cpu) {
-    cpu->a |= cpu->addr_abs;
+    cpu->a |= bus_read(cpu->addr_abs);
     update_nz(cpu, cpu->a);
     return 1;
 }
 
 uint8_t op_CMP(CPU *cpu) {
-    const uint8_t result = cpu->a - cpu->addr_abs;
-    set_flag(cpu, FLAG_C, result & 0xFF);
-    update_nz(cpu, cpu->a);
+    const uint8_t value = bus_read(cpu->addr_abs);
+    const uint8_t result = cpu->a - value;
+    set_flag(cpu, FLAG_C, cpu->a >= value);
+    update_nz(cpu, result);
     return 1;
 }
 
 uint8_t op_CPX(CPU *cpu) {
-    const uint8_t result = cpu->x - cpu->addr_abs;
-    set_flag(cpu, FLAG_C, result & 0xFF);
-    update_nz(cpu, cpu->x);
+    const uint8_t value = bus_read(cpu->addr_abs);
+    const uint8_t result = cpu->x - value;
+    set_flag(cpu, FLAG_C, cpu->x >= value);
+    update_nz(cpu, result);
     return 0;
 }
 
 uint8_t op_CPY(CPU *cpu) {
-    const uint8_t result = cpu->y- cpu->addr_abs;
-    set_flag(cpu, FLAG_C, result & 0xFF);
-    update_nz(cpu, cpu->y);
+    const uint8_t value = bus_read(cpu->addr_abs);
+    const uint8_t result = cpu->y - value;
+    set_flag(cpu, FLAG_C, cpu->y >= value);
+    update_nz(cpu, result);
     return 0;
 }
 
 uint8_t op_EOR(CPU *cpu) {
-    cpu->a ^= cpu->addr_abs;
+    cpu->a ^= bus_read(cpu->addr_abs);
     update_nz(cpu, cpu->a);
     return 1;
 }
@@ -210,7 +216,7 @@ uint8_t op_BVS(CPU *cpu) {
 
 uint8_t op_ASL(CPU *cpu) {
 
-    const bool cond = lookup[cpu->fetched].addrmode == addr_ACC;
+    const bool cond = lookup[cpu->fetched].addrmode == &addr_ACC;
     uint16_t temp = sr_helper_read(cpu, cond);
 
     set_flag(cpu, FLAG_C, temp & 0xFF00);
@@ -222,7 +228,7 @@ uint8_t op_ASL(CPU *cpu) {
 }
 
 uint8_t op_LSR(CPU *cpu) {
-    const bool cond = lookup[cpu->fetched].addrmode == addr_ACC;
+    const bool cond = lookup[cpu->fetched].addrmode == &addr_ACC;
     uint16_t temp = sr_helper_read(cpu, cond);
 
     set_flag(cpu, FLAG_C, temp & 0x01);
@@ -234,7 +240,7 @@ uint8_t op_LSR(CPU *cpu) {
 }
 
 uint8_t op_ROL(CPU *cpu) {
-    const bool cond = lookup[cpu->fetched].addrmode == addr_ACC;
+    const bool cond = lookup[cpu->fetched].addrmode == &addr_ACC;
     uint16_t temp = sr_helper_read(cpu, cond);
 
     uint8_t const old_c = get_flag(cpu, FLAG_C);
@@ -248,7 +254,7 @@ uint8_t op_ROL(CPU *cpu) {
 }
 
 uint8_t op_ROR(CPU *cpu) {
-    const bool cond = lookup[cpu->fetched].addrmode == addr_ACC;
+    const bool cond = lookup[cpu->fetched].addrmode == &addr_ACC;
     uint16_t temp = sr_helper_read(cpu, cond);
 
     uint8_t old_c = get_flag(cpu, FLAG_C);
@@ -314,7 +320,7 @@ uint8_t op_BRK(CPU *cpu) {
 }
 
 uint8_t op_INC(CPU *cpu) {
-    const bool cond = lookup[cpu->fetched].addrmode == addr_ACC;
+    const bool cond = lookup[cpu->fetched].addrmode == &addr_ACC;
     const uint16_t v = sr_helper_read(cpu, cond) + 1;
     sr_helper_write(cpu, cond, v);
     update_nz(cpu, v);
@@ -335,7 +341,7 @@ uint8_t op_INX(CPU *cpu) {
 }
 
 uint8_t op_DEC(CPU *cpu) {
-    const bool cond = lookup[cpu->fetched].addrmode == addr_ACC;
+    const bool cond = lookup[cpu->fetched].addrmode == &addr_ACC;
     const uint16_t v = sr_helper_read(cpu, cond) - 1;
     sr_helper_write(cpu, cond, v);
     update_nz(cpu, v);

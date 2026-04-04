@@ -1,18 +1,14 @@
-//
-// Created by Pandora on 1/4/26.
-//
 #pragma once
-#include <stdint.h>
-
-#include "cpu.h"
 
 #ifndef NESTORAS_INSTRUCTION_H
 #define NESTORAS_INSTRUCTION_H
 
-#endif //NESTORAS_INSTRUCTION_H
+#include <stdint.h>
+#include "cpu.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
+
 
 // Addressing mode returns 1 if page boundary crossed
 typedef uint8_t (*addrmode_f)(CPU *cpu);
@@ -26,10 +22,10 @@ typedef struct {
     addrmode_f addrmode;
     uint8_t bytes;
     uint8_t cycles;
-} instruction;
+} Instruction;
 
-extern instruction lookup[256];
-void init_lookup();
+extern Instruction lookup[256];
+void init_lookup(void);
 
 uint8_t op_LDA(CPU *cpu);
 uint8_t op_LDX(CPU *cpu);
@@ -79,7 +75,11 @@ uint8_t op_RTS(CPU *cpu);
 uint8_t op_RTI(CPU *cpu);
 uint8_t op_BRK(CPU *cpu);
 uint8_t op_INC(CPU *cpu);
+uint8_t op_INY(CPU *cpu);
+uint8_t op_INX(CPU *cpu);
 uint8_t op_DEC(CPU *cpu);
+uint8_t op_DEX(CPU *cpu);
+uint8_t op_DEY(CPU *cpu);
 
 uint8_t op_CLC(CPU *cpu);
 uint8_t op_SEC(CPU *cpu);
@@ -110,3 +110,6 @@ uint8_t addr_IZY(CPU *cpu);
 #ifdef __cplusplus
 }
 #endif
+
+#endif //NESTORAS_INSTRUCTION_H
+

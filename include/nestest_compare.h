@@ -16,29 +16,41 @@
 
 typedef struct {
     uint16_t pc;
-    uint8_t a, x, y, p, sp;
+    uint8_t a;
+    uint8_t x;
+    uint8_t y;
+    uint8_t p;
+    uint8_t sp;
     uint32_t cyc;
     char mnemonic[32];
 } NestestLine;
 
 static bool parse_nestest_line(const char *line, NestestLine *out) {
     // C000  4C F5 C5  JMP $C5F5                       A:00 X:00 Y:00 P:24 SP:FD CYC:7
-    if (strlen(line) < 10) return false;
+    if (!line || strlen(line) < 10) return false;
 
-    unsigned int pc, a, x, y, p, sp, cyc;
+    unsigned int pc;
+    unsigned int a;
+    unsigned int x;
+    unsigned int y;
+    unsigned int p;
+    unsigned int sp;
+    unsigned int cyc;
 
     if (sscanf(line, "%4X", &pc) != 1) return false;
     out->pc = (uint16_t)pc;
 
     // mnemonic starts at col 16, length up to 32 chars
     char mn_buf[33] = {0};
-    strncpy(mn_buf, line + 16, 32);
+    strncpy(mn_buf, line + 16, sizeof(mn_buf) - 1);
+    mn_buf[sizeof(mn_buf) - 1] = '\0';
     // trim trailing spaces
     for (int i = 31; i >= 0; i--) {
         if (mn_buf[i] == ' ' || mn_buf[i] == '\0') mn_buf[i] = '\0';
         else break;
     }
-    strncpy(out->mnemonic, mn_buf, 31);
+    strncpy(out->mnemonic, mn_buf, sizeof(out->mnemonic) - 1);
+    out->mnemonic[sizeof(out->mnemonic) - 1] = '\0';
 
     if (sscanf(line + 48, "A:%2X X:%2X Y:%2X P:%2X SP:%2X PPU:%*[^C]CYC:%u",
        &a, &x, &y, &p, &sp, &cyc)!= 6) return false;

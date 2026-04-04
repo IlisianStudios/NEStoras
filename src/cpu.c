@@ -7,7 +7,7 @@
 NestestLog nestest_log = {0};
 
 
-void log_cpu_state(CPU *cpu, Instruction inst, uint16_t pc) {
+void log_cpu_state(const CPU *cpu, Instruction inst, uint16_t pc) {
     // Print PC
     printf("%04X  ", pc);
 
@@ -143,9 +143,8 @@ void cpu_step(CPU *cpu) {
         log_cpu_state(cpu, inst, pc_snapshot);  // pass snapshot
 
     #ifndef NDEBUG
-    if (cpu->nestest_comp)
-        if (!nestest_compare(&nestest_log, cpu, &inst, pc_snapshot))
-            exit(1);
+    if (cpu->nestest_comp && !nestest_compare(&nestest_log, cpu, &inst, pc_snapshot))
+        exit(1);
     #endif
     uint8_t extra2 = inst.operate(cpu);
 

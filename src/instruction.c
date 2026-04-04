@@ -402,6 +402,7 @@ uint8_t op_BIT(CPU *cpu) {
     return 0;
 }
 
+// Note: cpu could be const here, but signature must match operatemode_f typedef
 uint8_t op_NOOP(CPU *cpu) {
     (void)cpu;
     return 0;

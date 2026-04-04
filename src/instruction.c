@@ -32,23 +32,20 @@ static inline void sr_helper_write(CPU *cpu, const bool cond, uint8_t data) {
 }
 
 uint8_t op_LDA(CPU *cpu) {
-    cpu->a = bus_read(cpu->pc);
-    set_flag(cpu, FLAG_Z, cpu->a);
-    set_flag(cpu, FLAG_N, cpu->a);
+    cpu->a = bus_read(cpu->addr_abs);
+    update_nz(cpu, cpu->a);
     return 1; // This instruction allows extra cycle
 }
 
 uint8_t op_LDX(CPU *cpu) {
-    cpu->x = bus_read(cpu->pc);
-    set_flag(cpu, FLAG_Z, cpu->a);
-    set_flag(cpu, FLAG_N, cpu->a);
+    cpu->x = bus_read(cpu->addr_abs);
+    update_nz(cpu, cpu->x);
     return 1; // This instruction allows extra cycle
 }
 
 uint8_t op_LDY(CPU *cpu) {
-    cpu->y = bus_read(cpu->pc);
-    set_flag(cpu, FLAG_Z, cpu->a);
-    set_flag(cpu, FLAG_N, cpu->a);
+    cpu->y = bus_read(cpu->addr_abs);
+    update_nz(cpu, cpu->y);
     return 1; // This instruction allows extra cycle
 }
 
@@ -325,12 +322,36 @@ uint8_t op_INC(CPU *cpu) {
     return 0;
 }
 
+uint8_t op_INY(CPU *cpu) {
+    cpu->y += 1;
+    update_nz(cpu, cpu->y);
+    return 0;
+}
+
+uint8_t op_INX(CPU *cpu) {
+    cpu->x += 1;
+    update_nz(cpu, cpu->x);
+    return 0;
+}
+
 uint8_t op_DEC(CPU *cpu) {
     const bool cond = lookup[cpu->fetched].addrmode == addr_ACC;
     const uint16_t v = sr_helper_read(cpu, cond) - 1;
     sr_helper_write(cpu, cond, v);
     update_nz(cpu, v);
 
+    return 0;
+}
+
+uint8_t op_DEX(CPU *cpu) {
+    cpu->x -= 1;
+    update_nz(cpu, cpu->x);
+    return 0;
+}
+
+uint8_t op_DEY(CPU *cpu) {
+    cpu->y -= 1;
+    update_nz(cpu, cpu->y);
     return 0;
 }
 
@@ -422,7 +443,7 @@ uint8_t addr_ZPY(CPU *cpu) {
 uint8_t addr_REL(CPU *cpu) {
     cpu->addr_rel = bus_read(advance_pc(cpu));
 
-    if (cpu->addr_rel == 0x80) {
+    if (cpu->addr_rel & 0x80) {
         cpu->addr_rel |= 0xFF00;
     }
     return 0;
@@ -674,12 +695,16 @@ void init_lookup(void) {
     lookup[0xF6] = (Instruction){ "INC", op_INC, addr_ZPX, 2, 6 };
     lookup[0xEE] = (Instruction){ "INC", op_INC, addr_ABS, 3, 6 };
     lookup[0xFE] = (Instruction){ "INC", op_INC, addr_ABX, 3, 7 };
+    lookup[0xE8] = (Instruction){ "INX", op_INX, addr_IMP, 1, 2 };
+    lookup[0xC8] = (Instruction){ "INY", op_INY, addr_IMP, 1, 2 };
 
     lookup[0x3A] = (Instruction){ "DEC", op_DEC, addr_ACC, 1, 2 };
     lookup[0xC6] = (Instruction){ "DEC", op_DEC, addr_ZPO, 2, 5 };
     lookup[0xD6] = (Instruction){ "DEC", op_DEC, addr_ZPX, 2, 6 };
     lookup[0xCE] = (Instruction){ "DEC", op_DEC, addr_ABS, 3, 6 };
     lookup[0xDE] = (Instruction){ "DEC", op_DEC, addr_ABX, 3, 7 };
+    lookup[0xCA] = (Instruction){ "DEX", op_DEX, addr_IMP, 1, 2 };
+    lookup[0x88] = (Instruction){ "DEY", op_DEY, addr_IMP, 1, 2 };
 
     lookup[0x18] = (Instruction){ "CLC", op_CLC, addr_IMP, 1, 2 };
     lookup[0x38] = (Instruction){ "SEC", op_SEC, addr_IMP, 1, 2 };

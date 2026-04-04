@@ -33,13 +33,14 @@ typedef struct{
     uint8_t fetched;
 
     bool testing_mode;
+    bool nestest_comp;
 } CPU;
 
 void cpu_reset(CPU *cpu);
 void cpu_nmi(CPU *cpu);
 void cpu_irq(CPU *cpu);
 void cpu_step(CPU *cpu);
-void set_flag(CPU *cpu, uint8_t flag, const bool value);
+void set_flag(CPU *cpu, uint8_t flag, bool value);
 bool get_flag(const CPU *cpu, uint8_t flag);
 void update_nz(CPU *cpu, uint8_t value);
 

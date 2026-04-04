@@ -141,6 +141,7 @@ void cpu_step(CPU *cpu) {
 
     if (cpu->testing_mode)
         log_cpu_state(cpu, inst, pc_snapshot);  // pass snapshot
+
 }
 
 void set_flag(CPU *cpu, const uint8_t flag, const bool value) {

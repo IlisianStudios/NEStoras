@@ -1,17 +1,19 @@
 #pragma once
 #include <stdint.h>
 
+#include "cartridge.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
 extern uint8_t ram[2048];
 
 static inline uint8_t apu_io_read(uint16_t addr) {
+    (void) addr;
     return 0x00;
 }
 
 static inline uint8_t ppu_register_read(uint16_t addr) {
-    return 0x00;
-}
-
-static inline uint8_t cartrige_read(uint16_t addr) {
+    (void) addr;
     return 0x00;
 }
 
@@ -31,7 +33,7 @@ static inline uint8_t bus_read(const uint16_t addr) {
     if (addr < 0x2000) return ram[addr & 0x07ff];
     else if (addr < 0x4000) return ppu_register_read(0x2000 | (addr & 0x2007));
     else if (addr < 0x4020) return apu_io_read(addr);
-    else return cartrige_read(addr);
+    else return cartridge->mapper.cpu_read(cartridge, addr);
 }
 
 static inline void bus_write(const uint16_t addr, const uint8_t data) {
@@ -46,3 +48,7 @@ static inline void bus_write(const uint16_t addr, const uint8_t data) {
     }
     cartrige_write(addr, data);
 }
+
+#ifdef __cplusplus
+}
+#endif

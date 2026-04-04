@@ -3,6 +3,10 @@
 #include <stdbool.h>
 #include "bus.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // Flag bit positions
 #define FLAG_C 0x01  // Carry
 #define FLAG_Z 0x02  // Zero
@@ -22,11 +26,13 @@ typedef struct{
     uint8_t status;
 
     uint8_t cycles;
-    uint16_t total_cycles;
+    uint64_t total_cycles;
 
     uint16_t addr_abs;
     uint16_t addr_rel;
     uint8_t fetched;
+
+    bool testing_mode;
 } CPU;
 
 void cpu_reset(CPU *cpu);
@@ -52,3 +58,8 @@ static inline uint8_t stack_pop(CPU *cpu){
     cpu->sp++;
     return bus_read(0x0100 | cpu->sp);
 }
+
+
+#ifdef __cplusplus
+}
+#endif

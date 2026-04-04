@@ -9,7 +9,7 @@
 
 Cartridge *cartridge = NULL;
 
-void try_free_cartridge() {
+void try_free_cartridge(void) {
     if (cartridge != NULL) {
         cartridge_free();
         cartridge = NULL;
@@ -75,7 +75,7 @@ bool cartridge_load(const char* path) {
 
 }
 
-void cartridge_free() {
+void cartridge_free(void) {
     free(cartridge->prg_rom);
     free(cartridge->chr_rom);
 

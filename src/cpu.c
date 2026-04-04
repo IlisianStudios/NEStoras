@@ -65,7 +65,7 @@ void log_cpu_state(CPU *cpu, Instruction inst, uint16_t pc) {
     printf("%-31s", operand);
 
     // Print CPU registers
-    printf("A:%02X X:%02X Y:%02X P:%02X SP:%02X CYC:%llu\n",
+    printf("A:%02X X:%02X Y:%02X P:%02X SP:%02X CYC:%llu\tNO PPU CYCLES, THEY ARE SKIPPED\n",
            cpu->a,
            cpu->x,
            cpu->y,
@@ -87,6 +87,7 @@ void cpu_reset(CPU *cpu){
     const uint8_t high = bus_read(0xFFFD);
     cpu->pc = (high << 8) | low; // set program counter to reset vector
     cpu->cycles = 0;
+    cpu->total_cycles = 7;
     cpu->testing_mode = false;
 }
 
@@ -131,16 +132,12 @@ void fetch(CPU *cpu) {
 }
 
 void cpu_step(CPU *cpu) {
+    cpu->cycles = 0;
     uint16_t pc_snapshot = cpu->pc;  // snapshot HERE
     fetch(cpu);
     Instruction inst = lookup[cpu->fetched];
 
     uint8_t extra1 = inst.addrmode(cpu);
-    uint8_t extra2 = inst.operate(cpu);
-
-    uint8_t cycles = inst.cycles + (extra1 & extra2);
-    cpu->cycles = cycles;
-    cpu->total_cycles += cycles;
 
     if (cpu->testing_mode)
         log_cpu_state(cpu, inst, pc_snapshot);  // pass snapshot
@@ -150,7 +147,11 @@ void cpu_step(CPU *cpu) {
         if (!nestest_compare(&nestest_log, cpu, &inst, pc_snapshot))
             exit(1);
     #endif
+    uint8_t extra2 = inst.operate(cpu);
 
+    uint8_t cycles = inst.cycles + (extra1 & extra2);
+    cpu->cycles += cycles;
+    cpu->total_cycles += cpu->cycles ;
 }
 
 void set_flag(CPU *cpu, const uint8_t flag, const bool value) {

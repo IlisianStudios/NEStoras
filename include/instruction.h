@@ -75,7 +75,11 @@ uint8_t op_RTS(CPU *cpu);
 uint8_t op_RTI(CPU *cpu);
 uint8_t op_BRK(CPU *cpu);
 uint8_t op_INC(CPU *cpu);
+uint8_t op_INY(CPU *cpu);
+uint8_t op_INX(CPU *cpu);
 uint8_t op_DEC(CPU *cpu);
+uint8_t op_DEX(CPU *cpu);
+uint8_t op_DEY(CPU *cpu);
 
 uint8_t op_CLC(CPU *cpu);
 uint8_t op_SEC(CPU *cpu);

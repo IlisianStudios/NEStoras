@@ -40,8 +40,8 @@ static bool parse_nestest_line(const char *line, NestestLine *out) {
     }
     strncpy(out->mnemonic, mn_buf, 31);
 
-    if (sscanf(line + 48, "A:%2X X:%2X Y:%2X P:%2X SP:%2X CYC:%u",
-               &a, &x, &y, &p, &sp, &cyc) != 6) return false;
+    if (sscanf(line + 48, "A:%2X X:%2X Y:%2X P:%2X SP:%2X PPU:%*[^C]CYC:%u",
+       &a, &x, &y, &p, &sp, &cyc)!= 6) return false;
 
     out->a   = (uint8_t)a;
     out->x   = (uint8_t)x;

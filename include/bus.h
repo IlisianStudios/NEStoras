@@ -37,7 +37,7 @@ static inline uint8_t bus_read(const uint16_t addr) {
     Address $1000 points there too.
     */
     if (addr < 0x2000) return ram[addr & 0x07ff];
-    else if (addr < 0x4000) return ppu_register_read(0x2000 | (addr & 0x2007));
+    else if (addr < 0x4000) return ppu_register_read(addr & 0x2007 );
     else if (addr < 0x4020) return apu_io_read(addr);
     else return cartridge->mapper.cpu_read(cartridge, addr);
 }

@@ -1,6 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include <stdbool.h>
+#include "bus.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -35,6 +36,8 @@ typedef struct{
 } CPU;
 
 void cpu_reset(CPU *cpu);
+void cpu_nmi(CPU *cpu);
+void cpu_irq(CPU *cpu);
 void cpu_step(CPU *cpu);
 void set_flag(CPU *cpu, uint8_t flag, const bool value);
 bool get_flag(const CPU *cpu, uint8_t flag);
@@ -45,6 +48,17 @@ uint16_t static inline advance_pc(CPU *cpu){
     cpu->pc++;
     return mem;
 }
+
+static inline void stack_push(CPU *cpu, uint8_t value){
+    bus_write(0x0100 | cpu->sp, value);
+    cpu->sp--;
+}
+
+static inline uint8_t stack_pop(CPU *cpu){
+    cpu->sp++;
+    return bus_read(0x0100 | cpu->sp);
+}
+
 
 #ifdef __cplusplus
 }

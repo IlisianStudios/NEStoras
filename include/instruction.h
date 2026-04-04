@@ -73,6 +73,24 @@ uint8_t op_LSR(CPU *cpu);
 uint8_t op_ROL(CPU *cpu);
 uint8_t op_ROR(CPU *cpu);
 
+uint8_t op_JMP(CPU *cpu);
+uint8_t op_JSR(CPU *cpu);
+uint8_t op_RTS(CPU *cpu);
+uint8_t op_RTI(CPU *cpu);
+uint8_t op_BRK(CPU *cpu);
+uint8_t op_INC(CPU *cpu);
+uint8_t op_DEC(CPU *cpu);
+
+uint8_t op_CLC(CPU *cpu);
+uint8_t op_SEC(CPU *cpu);
+uint8_t op_CLI(CPU *cpu);
+uint8_t op_SEI(CPU *cpu);
+uint8_t op_CLV(CPU *cpu);
+uint8_t op_CLD(CPU *cpu);
+uint8_t op_SED(CPU *cpu);
+
+uint8_t op_BIT(CPU *cpu);
+
 uint8_t op_NOOP(CPU *cpu);
 
 uint8_t addr_IMP(CPU *cpu);

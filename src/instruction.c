@@ -4,18 +4,6 @@
 #include "../include/cpu.h"
 #include "../include/instruction.h"
 
-static inline void stack_push(CPU *cpu, uint8_t value)
-{
-    bus_write(0x0100 | cpu->sp, value);
-    cpu->sp--;
-}
-
-static inline uint8_t stack_pop(CPU *cpu)
-{
-    cpu->sp++;
-    return bus_read(0x0100 | cpu->sp);
-}
-
 static inline uint8_t branch(CPU *cpu, const bool cond)
 {
     if (cond)
@@ -41,7 +29,7 @@ static inline uint16_t sr_helper_read(const CPU *cpu, const bool cond) {
 
 static inline void sr_helper_write(CPU *cpu, const bool cond, uint8_t data) {
     if (cond) {
-        cpu->a = data;;
+        cpu->a = data;
     } else {
         bus_write(cpu->addr_abs, data);
     }
@@ -278,6 +266,122 @@ uint8_t op_ROR(CPU *cpu) {
     update_nz(cpu, temp & 0xFF);
 
     sr_helper_write(cpu, cond, temp);
+    return 0;
+}
+
+uint8_t op_JMP(CPU *cpu) {
+    cpu->a = cpu->addr_abs;
+    return 0;
+}
+
+uint8_t op_JSR(CPU *cpu) {
+    cpu->pc--;
+
+    stack_push(cpu, (cpu->pc >> 8) & 0xFF);
+    stack_push(cpu, (cpu->pc & 0xFF));
+
+    cpu->pc = cpu->addr_abs;
+    return 0;
+}
+
+uint8_t op_RTS(CPU *cpu) {
+    const uint8_t lo = stack_pop(cpu);
+    const uint8_t hi = stack_pop(cpu);
+
+    cpu->pc = (hi << 8) | lo;
+    cpu->pc++;
+    return 0;
+}
+
+uint8_t op_RTI(CPU *cpu) {
+    cpu->status = stack_pop(cpu);
+
+    const uint16_t lo = stack_pop(cpu);
+    const uint16_t hi = stack_pop(cpu);
+
+    cpu->pc = (hi << 8) | lo;
+    return 0;
+}
+
+uint8_t op_BRK(CPU *cpu) {
+    cpu->pc++;
+
+    stack_push(cpu, (cpu->pc >> 8) & 0xFF);
+    stack_push(cpu, cpu->pc & 0xFF);
+
+    set_flag(cpu, FLAG_B, true);
+    stack_push(cpu, cpu->status);
+    set_flag(cpu, FLAG_I, true);
+
+    uint16_t lo = bus_read(0xFFFE);
+    uint16_t hi = bus_read(0xFFFF);
+
+    cpu->pc = (hi << 8) | lo;
+    return 0;
+}
+
+uint8_t op_INC(CPU *cpu) {
+    const bool cond = lookup[cpu->fetched].addrmode == addr_ACC;
+    const uint16_t v = sr_helper_read(cpu, cond) + 1;
+    sr_helper_write(cpu, cond, v);
+    update_nz(cpu, v);
+
+    return 0;
+}
+
+uint8_t op_DEC(CPU *cpu) {
+    const bool cond = lookup[cpu->fetched].addrmode == addr_ACC;
+    const uint16_t v = sr_helper_read(cpu, cond) - 1;
+    sr_helper_write(cpu, cond, v);
+    update_nz(cpu, v);
+
+    return 0;
+}
+
+uint8_t op_CLC(CPU *cpu) {
+    set_flag(cpu, FLAG_C, false);
+    return 0;
+}
+
+uint8_t op_SEC(CPU *cpu) {
+    set_flag(cpu, FLAG_C, true);
+    return 0;
+}
+
+uint8_t op_CLI(CPU *cpu) {
+    set_flag(cpu, FLAG_I, false);
+    return 0;
+}
+
+uint8_t op_SEI(CPU *cpu) {
+    set_flag(cpu, FLAG_I, true);
+    return 0;
+}
+
+uint8_t op_CLV(CPU *cpu) {
+    set_flag(cpu, FLAG_V, false);
+    return 0;
+}
+
+uint8_t op_CLD(CPU *cpu) {
+    set_flag(cpu, FLAG_D, false);
+    return 0;
+}
+
+uint8_t op_SED(CPU *cpu) {
+    set_flag(cpu, FLAG_D, true);
+    return 0;
+}
+
+uint8_t op_BIT(CPU *cpu) {
+    const uint8_t value = bus_read(cpu->addr_abs);
+
+    const uint8_t result = cpu->a & value;
+
+    set_flag(cpu, FLAG_Z, result == 0);
+    set_flag(cpu, FLAG_N, value & 0x80);
+    set_flag(cpu, FLAG_V, value & 0x40);
+
     return 0;
 }
 
@@ -534,6 +638,44 @@ void init_lookup() {
     lookup[0x76] = (instruction){ "ROR", op_ROR, addr_ZPX, 2, 6 };
     lookup[0x6E] = (instruction){ "ROR", op_ROR, addr_ABS, 3, 6 };
     lookup[0x7E] = (instruction){ "ROR", op_ROR, addr_ABX, 3, 7 };
+    // CONtROL
+    lookup[0x4C] = (instruction){ "JMP", op_JMP, addr_ABS, 3, 3 };
+    lookup[0x6C] = (instruction){ "JMP", op_JMP, addr_IND, 3, 5 };
+
+    lookup[0x20] = (instruction){ "JSR", op_JSR, addr_ABS, 3, 6 };
+    lookup[0x60] = (instruction){ "RTS", op_RTS, addr_IMP, 1, 6 };
+    lookup[0x40] = (instruction){ "RTI", op_RTI, addr_IMP, 1, 6 };
+    lookup[0x00] = (instruction){ "BRK", op_BRK, addr_IMP, 1, 7 };
+
+    lookup[0x1A] = (instruction){ "INC", op_INC, addr_ACC, 1, 2 };
+    lookup[0xE6] = (instruction){ "INC", op_INC, addr_ZPO, 2, 5 };
+    lookup[0xF6] = (instruction){ "INC", op_INC, addr_ZPX, 2, 6 };
+    lookup[0xEE] = (instruction){ "INC", op_INC, addr_ABS, 3, 6 };
+    lookup[0xFE] = (instruction){ "INC", op_INC, addr_ABX, 3, 7 };
+
+    lookup[0x3A] = (instruction){ "DEC", op_DEC, addr_ACC, 1, 2 };
+    lookup[0xC6] = (instruction){ "DEC", op_DEC, addr_ZPO, 2, 5 };
+    lookup[0xD6] = (instruction){ "DEC", op_DEC, addr_ZPX, 2, 6 };
+    lookup[0xCE] = (instruction){ "DEC", op_DEC, addr_ABS, 3, 6 };
+    lookup[0xDE] = (instruction){ "DEC", op_DEC, addr_ABX, 3, 7 };
+
+    lookup[0x18] = (instruction){ "CLC", op_CLC, addr_IMP, 1, 2 };
+    lookup[0x38] = (instruction){ "SEC", op_SEC, addr_IMP, 1, 2 };
+    lookup[0x58] = (instruction){ "CLI", op_CLI, addr_IMP, 1, 2 };
+    lookup[0x71] = (instruction){ "SEI", op_SEI, addr_IMP, 1, 2 };
+    lookup[0xB8] = (instruction){ "CLV", op_CLV, addr_IMP, 1, 2 };
+    lookup[0xD8] = (instruction){ "CLD", op_CLD, addr_IMP, 1, 2 };
+    lookup[0xF8] = (instruction){ "SED", op_SED, addr_IMP, 1, 2 };
+
+    lookup[0x89] = (instruction){ "BIT", op_BIT, addr_IMM, 2, 2 };
+    lookup[0x24] = (instruction){ "BIT", op_BIT, addr_ZPO, 2, 3 };
+    lookup[0x34] = (instruction){ "BIT", op_BIT, addr_ZPX, 2, 4 };
+    lookup[0x2C] = (instruction){ "BIT", op_BIT, addr_ABS, 3, 4 };
+    lookup[0x3C] = (instruction){ "BIT", op_BIT, addr_ABX, 3, 4 };
+
+
+
+
 
 
 }

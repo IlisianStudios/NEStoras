@@ -19,6 +19,7 @@ add_executable(NEStoras
         include/instruction.h
         src/instruction.c
         src/cartridge.c
+        include/mappers.h
 )
 
 target_include_directories(NEStoras PRIVATE
@@ -29,5 +30,5 @@ target_include_directories(NEStoras PRIVATE
 target_link_libraries(NEStoras PRIVATE SDL2::SDL2)
 
 target_compile_options(NEStoras PRIVATE
-    $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Wall -Wextra -Wpedantic>
+    $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Wall -Wextra -Wpedantic -lSDL2 -lSDL2_ttf>
 )

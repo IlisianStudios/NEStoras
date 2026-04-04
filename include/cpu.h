@@ -2,6 +2,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // Flag bit positions
 #define FLAG_C 0x01  // Carry
 #define FLAG_Z 0x02  // Zero
@@ -26,6 +30,8 @@ typedef struct{
     uint16_t addr_abs;
     uint16_t addr_rel;
     uint8_t fetched;
+
+    bool testing_mode;
 } CPU;
 
 void cpu_reset(CPU *cpu);
@@ -39,3 +45,7 @@ uint16_t static inline advance_pc(CPU *cpu){
     cpu->pc++;
     return mem;
 }
+
+#ifdef __cplusplus
+}
+#endif

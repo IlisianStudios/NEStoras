@@ -132,6 +132,7 @@ void fetch(CPU *cpu) {
 }
 
 void cpu_step(CPU *cpu) {
+    cpu->cycles = 0;
     uint16_t pc_snapshot = cpu->pc;  // snapshot HERE
     fetch(cpu);
     Instruction inst = lookup[cpu->fetched];
@@ -149,7 +150,7 @@ void cpu_step(CPU *cpu) {
     uint8_t extra2 = inst.operate(cpu);
 
     uint8_t cycles = inst.cycles + (extra1 & extra2);
-    cpu->cycles = cycles;
+    cpu->cycles += cycles;
     cpu->total_cycles += cpu->cycles ;
 }
 

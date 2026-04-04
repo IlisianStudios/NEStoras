@@ -87,6 +87,7 @@ void cpu_reset(CPU *cpu){
     const uint8_t high = bus_read(0xFFFD);
     cpu->pc = (high << 8) | low; // set program counter to reset vector
     cpu->cycles = 0;
+    cpu->total_cycles = 7;
     cpu->testing_mode = false;
 }
 

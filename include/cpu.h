@@ -7,6 +7,8 @@
 extern "C" {
 #endif
 
+
+
 // Flag bit positions
 #define FLAG_C 0x01  // Carry
 #define FLAG_Z 0x02  // Zero
@@ -33,13 +35,14 @@ typedef struct{
     uint8_t fetched;
 
     bool testing_mode;
+    bool nestest_comp;
 } CPU;
 
 void cpu_reset(CPU *cpu);
 void cpu_nmi(CPU *cpu);
 void cpu_irq(CPU *cpu);
 void cpu_step(CPU *cpu);
-void set_flag(CPU *cpu, uint8_t flag, const bool value);
+void set_flag(CPU *cpu, uint8_t flag, bool value);
 bool get_flag(const CPU *cpu, uint8_t flag);
 void update_nz(CPU *cpu, uint8_t value);
 
@@ -63,3 +66,4 @@ static inline uint8_t stack_pop(CPU *cpu){
 #ifdef __cplusplus
 }
 #endif
+

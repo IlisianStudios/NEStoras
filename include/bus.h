@@ -17,11 +17,17 @@ static inline uint8_t ppu_register_read(uint16_t addr) {
     return 0x00;
 }
 
-static inline void apu_io_write(uint16_t addr, uint8_t data) {}
+static inline void apu_io_write(uint16_t addr, uint8_t data) {
+    (void)addr; (void)data;
+}
 
-static inline uint8_t ppu_register_write(uint16_t addr, uint8_t data) {}
+static inline void ppu_register_write(uint16_t addr, uint8_t data) {
+    (void)addr; (void)data;
+}
 
-static inline uint8_t cartrige_write(uint16_t addr, uint8_t data) {}
+static inline void cartrige_write(uint16_t addr, uint8_t data) {
+    (void)addr; (void)data;
+}
 
 static inline uint8_t bus_read(const uint16_t addr) {
     /*In the 2A03 memory map, you’ll notice the RAM is only 2 KB ($0000–$07FF), but the map says it goes up to $1FFF.
@@ -52,3 +58,4 @@ static inline void bus_write(const uint16_t addr, const uint8_t data) {
 #ifdef __cplusplus
 }
 #endif
+

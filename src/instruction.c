@@ -1,8 +1,4 @@
-#include <stdint.h>
-
-#include "../include/bus.h"
-#include "../include/cpu.h"
-#include "../include/instruction.h"
+#include "instruction.h"
 
 static inline uint8_t branch(CPU *cpu, const bool cond)
 {
@@ -386,6 +382,7 @@ uint8_t op_BIT(CPU *cpu) {
 }
 
 uint8_t op_NOOP(CPU *cpu) {
+    (void)cpu;
     return 0;
 }
 
@@ -497,206 +494,206 @@ uint8_t addr_IZY(CPU *cpu) {
     return (cpu->addr_abs & 0xFF00) != (base & 0xFF00);
 }
 
-instruction lookup[256];
+Instruction lookup[256];
 
 //https://masswerk.at/6502/6502_instruction_set.html#LSR
-void init_lookup() {
+void init_lookup(void) {
     for (int i = 0; i < 256; i++) {
-        lookup[i] = (instruction){
+        lookup[i] = (Instruction){
             "???", op_NOOP, addr_IMP, 1, 2
         };
     }
     // NOP
-    lookup[0xEA] = (instruction){ "NOP", op_NOOP, addr_IMP, 1, 2 };
+    lookup[0xEA] = (Instruction){ "NOP", op_NOOP, addr_IMP, 1, 2 };
     // LDA
-    lookup[0xA9] = (instruction){ "LDA", op_LDA, addr_IMM, 2, 2 };
-    lookup[0xA5] = (instruction){ "LDA", op_LDA, addr_ZPO, 2, 3 };
-    lookup[0xB5] = (instruction){ "LDA", op_LDA, addr_ZPX, 2, 4 };
-    lookup[0xAD] = (instruction){ "LDA", op_LDA, addr_ABS, 2, 4 };
-    lookup[0xBD] = (instruction){ "LDA", op_LDA, addr_ABX, 2, 4 };
-    lookup[0xB9] = (instruction){ "LDA", op_LDA, addr_ABY, 2, 4 };
-    lookup[0xA1] = (instruction){ "LDA", op_LDA, addr_IDX, 2, 6 };
-    lookup[0xB1] = (instruction){ "LDA", op_LDA, addr_IZY, 2, 5 };
+    lookup[0xA9] = (Instruction){ "LDA", op_LDA, addr_IMM, 2, 2 };
+    lookup[0xA5] = (Instruction){ "LDA", op_LDA, addr_ZPO, 2, 3 };
+    lookup[0xB5] = (Instruction){ "LDA", op_LDA, addr_ZPX, 2, 4 };
+    lookup[0xAD] = (Instruction){ "LDA", op_LDA, addr_ABS, 2, 4 };
+    lookup[0xBD] = (Instruction){ "LDA", op_LDA, addr_ABX, 2, 4 };
+    lookup[0xB9] = (Instruction){ "LDA", op_LDA, addr_ABY, 2, 4 };
+    lookup[0xA1] = (Instruction){ "LDA", op_LDA, addr_IDX, 2, 6 };
+    lookup[0xB1] = (Instruction){ "LDA", op_LDA, addr_IZY, 2, 5 };
     // LDX
-    lookup[0xA2] = (instruction){ "LDX", op_LDX, addr_IMM, 2, 2 };
-    lookup[0xA6] = (instruction){ "LDX", op_LDX, addr_ZPO, 2, 3 };
-    lookup[0xB6] = (instruction){ "LDX", op_LDX, addr_ZPY, 2, 4 };
-    lookup[0xAE] = (instruction){ "LDX", op_LDX, addr_ABS, 2, 4 };
-    lookup[0xBE] = (instruction){ "LDX", op_LDX, addr_ABY, 2, 4 };
+    lookup[0xA2] = (Instruction){ "LDX", op_LDX, addr_IMM, 2, 2 };
+    lookup[0xA6] = (Instruction){ "LDX", op_LDX, addr_ZPO, 2, 3 };
+    lookup[0xB6] = (Instruction){ "LDX", op_LDX, addr_ZPY, 2, 4 };
+    lookup[0xAE] = (Instruction){ "LDX", op_LDX, addr_ABS, 2, 4 };
+    lookup[0xBE] = (Instruction){ "LDX", op_LDX, addr_ABY, 2, 4 };
     // LDY
-    lookup[0xA0] = (instruction){ "LDY", op_LDY, addr_IMM, 2, 2 };
-    lookup[0xA4] = (instruction){ "LDY", op_LDY, addr_ZPO, 2, 3 };
-    lookup[0xB4] = (instruction){ "LDY", op_LDY, addr_ZPX, 2, 4 };
-    lookup[0xAC] = (instruction){ "LDY", op_LDY, addr_ABS, 2, 4 };
-    lookup[0xBC] = (instruction){ "LDY", op_LDY, addr_ABX, 2, 4 };
+    lookup[0xA0] = (Instruction){ "LDY", op_LDY, addr_IMM, 2, 2 };
+    lookup[0xA4] = (Instruction){ "LDY", op_LDY, addr_ZPO, 2, 3 };
+    lookup[0xB4] = (Instruction){ "LDY", op_LDY, addr_ZPX, 2, 4 };
+    lookup[0xAC] = (Instruction){ "LDY", op_LDY, addr_ABS, 2, 4 };
+    lookup[0xBC] = (Instruction){ "LDY", op_LDY, addr_ABX, 2, 4 };
     // STA
-    lookup[0x85] = (instruction){ "STA", op_STA, addr_ZPO, 2, 3 };
-    lookup[0x95] = (instruction){ "STA", op_STA, addr_ZPX, 2, 4 };
-    lookup[0x8D] = (instruction){ "STA", op_STA, addr_ABS, 3, 4 };
-    lookup[0x9D] = (instruction){ "STA", op_STA, addr_ABX, 3, 5 };
-    lookup[0x99] = (instruction){ "STA", op_STA, addr_ABY, 3, 5 };
-    lookup[0x81] = (instruction){ "STA", op_STA, addr_IDX, 2, 6 };
-    lookup[0x91] = (instruction){ "STA", op_STA, addr_IZY, 2, 6 };
+    lookup[0x85] = (Instruction){ "STA", op_STA, addr_ZPO, 2, 3 };
+    lookup[0x95] = (Instruction){ "STA", op_STA, addr_ZPX, 2, 4 };
+    lookup[0x8D] = (Instruction){ "STA", op_STA, addr_ABS, 3, 4 };
+    lookup[0x9D] = (Instruction){ "STA", op_STA, addr_ABX, 3, 5 };
+    lookup[0x99] = (Instruction){ "STA", op_STA, addr_ABY, 3, 5 };
+    lookup[0x81] = (Instruction){ "STA", op_STA, addr_IDX, 2, 6 };
+    lookup[0x91] = (Instruction){ "STA", op_STA, addr_IZY, 2, 6 };
     // STX
-    lookup[0x86] = (instruction){ "STX", op_STX, addr_ZPO, 2, 3 };
-    lookup[0x96] = (instruction){ "STX", op_STX, addr_ZPY, 2, 4 };
-    lookup[0x8E] = (instruction){ "STX", op_STX, addr_ABS, 3, 4 };
+    lookup[0x86] = (Instruction){ "STX", op_STX, addr_ZPO, 2, 3 };
+    lookup[0x96] = (Instruction){ "STX", op_STX, addr_ZPY, 2, 4 };
+    lookup[0x8E] = (Instruction){ "STX", op_STX, addr_ABS, 3, 4 };
     // STY
-    lookup[0x84] = (instruction){ "STY", op_STY, addr_ZPO, 2, 3 };
-    lookup[0x94] = (instruction){ "STY", op_STY, addr_ZPY, 2, 4 };
-    lookup[0x8C] = (instruction){ "STY", op_STY, addr_ABS, 3, 4 };
+    lookup[0x84] = (Instruction){ "STY", op_STY, addr_ZPO, 2, 3 };
+    lookup[0x94] = (Instruction){ "STY", op_STY, addr_ZPY, 2, 4 };
+    lookup[0x8C] = (Instruction){ "STY", op_STY, addr_ABS, 3, 4 };
     // TAX
-    lookup[0xAA] = (instruction){ "TAX", op_TAX, addr_IMP, 1, 2 };
+    lookup[0xAA] = (Instruction){ "TAX", op_TAX, addr_IMP, 1, 2 };
     // TAY
-    lookup[0xA8] = (instruction){ "TAY", op_TAY, addr_IMP, 1, 2 };
+    lookup[0xA8] = (Instruction){ "TAY", op_TAY, addr_IMP, 1, 2 };
     // TXA
-    lookup[0x8A] = (instruction){ "TXA", op_TXA, addr_IMP, 1, 2 };
+    lookup[0x8A] = (Instruction){ "TXA", op_TXA, addr_IMP, 1, 2 };
     // TYA
-    lookup[0x98] = (instruction){ "TYA", op_TYA, addr_IMP, 1, 2 };
+    lookup[0x98] = (Instruction){ "TYA", op_TYA, addr_IMP, 1, 2 };
     // TSX
-    lookup[0xBA] = (instruction){ "TSX", op_TSX, addr_IMP, 1, 2 };
+    lookup[0xBA] = (Instruction){ "TSX", op_TSX, addr_IMP, 1, 2 };
     // TXS
-    lookup[0x9A] = (instruction){ "TXS", op_TXS, addr_IMP, 1, 2 };
+    lookup[0x9A] = (Instruction){ "TXS", op_TXS, addr_IMP, 1, 2 };
     // PHA
-    lookup[0x48] = (instruction){ "PHA", op_PHA, addr_IMP, 1, 3 };
+    lookup[0x48] = (Instruction){ "PHA", op_PHA, addr_IMP, 1, 3 };
     // PLA
-    lookup[0x68] = (instruction){ "PLA", op_PLA, addr_IMP, 1, 4 };
+    lookup[0x68] = (Instruction){ "PLA", op_PLA, addr_IMP, 1, 4 };
     // PHP
-    lookup[0x08] = (instruction){ "PHP", op_PHP, addr_IMP, 1, 3 };
+    lookup[0x08] = (Instruction){ "PHP", op_PHP, addr_IMP, 1, 3 };
     // PLP
-    lookup[0x28] = (instruction){ "PLP", op_PLP, addr_IMP, 1, 4 };
+    lookup[0x28] = (Instruction){ "PLP", op_PLP, addr_IMP, 1, 4 };
     // ALU
-    lookup[0x72] = (instruction){ "ADC", op_ADC, addr_ZPO, 2, 5 };
-    lookup[0x69] = (instruction){ "ADC", op_ADC, addr_IMM, 2, 2 };
-    lookup[0x65] = (instruction){ "ADC", op_ADC, addr_ZPO, 2, 3 };
-    lookup[0x75] = (instruction){ "ADC", op_ADC, addr_ZPX, 2, 4 };
-    lookup[0x6D] = (instruction){ "ADC", op_ADC, addr_ABS, 3, 4 };
-    lookup[0x7D] = (instruction){ "ADC", op_ADC, addr_ABX, 3, 4 };
-    lookup[0x79] = (instruction){ "ADC", op_ADC, addr_ABY, 3, 4 };
-    lookup[0x61] = (instruction){ "ADC", op_ADC, addr_IDX, 2, 6 };
-    lookup[0x71] = (instruction){ "ADC", op_ADC, addr_IZY, 2, 5 };
+    lookup[0x72] = (Instruction){ "ADC", op_ADC, addr_ZPO, 2, 5 };
+    lookup[0x69] = (Instruction){ "ADC", op_ADC, addr_IMM, 2, 2 };
+    lookup[0x65] = (Instruction){ "ADC", op_ADC, addr_ZPO, 2, 3 };
+    lookup[0x75] = (Instruction){ "ADC", op_ADC, addr_ZPX, 2, 4 };
+    lookup[0x6D] = (Instruction){ "ADC", op_ADC, addr_ABS, 3, 4 };
+    lookup[0x7D] = (Instruction){ "ADC", op_ADC, addr_ABX, 3, 4 };
+    lookup[0x79] = (Instruction){ "ADC", op_ADC, addr_ABY, 3, 4 };
+    lookup[0x61] = (Instruction){ "ADC", op_ADC, addr_IDX, 2, 6 };
+    lookup[0x71] = (Instruction){ "ADC", op_ADC, addr_IZY, 2, 5 };
 
-    lookup[0xE9] = (instruction){ "SBC", op_SBC, addr_IMM, 2, 2 };
-    lookup[0xE5] = (instruction){ "SBC", op_SBC, addr_ZPO, 2, 3 };
-    lookup[0xF5] = (instruction){ "SBC", op_SBC, addr_ZPX, 2, 4 };
-    lookup[0xED] = (instruction){ "SBC", op_SBC, addr_ABS, 3, 4 };
-    lookup[0xFD] = (instruction){ "SBC", op_SBC, addr_ABX, 3, 4 };
-    lookup[0xF9] = (instruction){ "SBC", op_SBC, addr_ABY, 3, 4 };
-    lookup[0xE1] = (instruction){ "SBC", op_SBC, addr_IDX, 2, 6 };
-    lookup[0xF1] = (instruction){ "SBC", op_SBC, addr_IZY, 2, 5 };
-    lookup[0xF2] = (instruction){ "SBC", op_SBC, addr_ZPO, 2, 5 };
+    lookup[0xE9] = (Instruction){ "SBC", op_SBC, addr_IMM, 2, 2 };
+    lookup[0xE5] = (Instruction){ "SBC", op_SBC, addr_ZPO, 2, 3 };
+    lookup[0xF5] = (Instruction){ "SBC", op_SBC, addr_ZPX, 2, 4 };
+    lookup[0xED] = (Instruction){ "SBC", op_SBC, addr_ABS, 3, 4 };
+    lookup[0xFD] = (Instruction){ "SBC", op_SBC, addr_ABX, 3, 4 };
+    lookup[0xF9] = (Instruction){ "SBC", op_SBC, addr_ABY, 3, 4 };
+    lookup[0xE1] = (Instruction){ "SBC", op_SBC, addr_IDX, 2, 6 };
+    lookup[0xF1] = (Instruction){ "SBC", op_SBC, addr_IZY, 2, 5 };
+    lookup[0xF2] = (Instruction){ "SBC", op_SBC, addr_ZPO, 2, 5 };
 
-    lookup[0x29] = (instruction){ "AND", op_AND, addr_IMM, 2, 2 };
-    lookup[0x25] = (instruction){ "AND", op_AND, addr_ZPO, 2, 3 };
-    lookup[0x35] = (instruction){ "AND", op_AND, addr_ZPX, 2, 4 };
-    lookup[0x3D] = (instruction){ "AND", op_AND, addr_ABX, 3, 4 };
-    lookup[0x2D] = (instruction){ "AND", op_AND, addr_ABS, 3, 4 };
-    lookup[0x39] = (instruction){ "AND", op_AND, addr_ABY, 3, 4 };
-    lookup[0x21] = (instruction){ "AND", op_AND, addr_IDX, 2, 6 };
-    lookup[0x31] = (instruction){ "AND", op_AND, addr_IZY, 2, 5 };
+    lookup[0x29] = (Instruction){ "AND", op_AND, addr_IMM, 2, 2 };
+    lookup[0x25] = (Instruction){ "AND", op_AND, addr_ZPO, 2, 3 };
+    lookup[0x35] = (Instruction){ "AND", op_AND, addr_ZPX, 2, 4 };
+    lookup[0x3D] = (Instruction){ "AND", op_AND, addr_ABX, 3, 4 };
+    lookup[0x2D] = (Instruction){ "AND", op_AND, addr_ABS, 3, 4 };
+    lookup[0x39] = (Instruction){ "AND", op_AND, addr_ABY, 3, 4 };
+    lookup[0x21] = (Instruction){ "AND", op_AND, addr_IDX, 2, 6 };
+    lookup[0x31] = (Instruction){ "AND", op_AND, addr_IZY, 2, 5 };
 
-    lookup[0x09] = (instruction){ "ORA", op_ORA, addr_IMM, 2, 2 };
-    lookup[0x05] = (instruction){ "ORA", op_ORA, addr_ZPO, 2, 3 };
-    lookup[0x15] = (instruction){ "ORA", op_ORA, addr_ZPX, 2, 4 };
-    lookup[0x0D] = (instruction){ "ORA", op_ORA, addr_ABS, 3, 4 };
-    lookup[0x1D] = (instruction){ "ORA", op_ORA, addr_ABX, 3, 4 };
-    lookup[0x19] = (instruction){ "ORA", op_ORA, addr_ABY, 3, 4 };
-    lookup[0x01] = (instruction){ "ORA", op_ORA, addr_IDX, 2, 6 };
-    lookup[0x11] = (instruction){ "ORA", op_ORA, addr_IZY, 2, 5 };
+    lookup[0x09] = (Instruction){ "ORA", op_ORA, addr_IMM, 2, 2 };
+    lookup[0x05] = (Instruction){ "ORA", op_ORA, addr_ZPO, 2, 3 };
+    lookup[0x15] = (Instruction){ "ORA", op_ORA, addr_ZPX, 2, 4 };
+    lookup[0x0D] = (Instruction){ "ORA", op_ORA, addr_ABS, 3, 4 };
+    lookup[0x1D] = (Instruction){ "ORA", op_ORA, addr_ABX, 3, 4 };
+    lookup[0x19] = (Instruction){ "ORA", op_ORA, addr_ABY, 3, 4 };
+    lookup[0x01] = (Instruction){ "ORA", op_ORA, addr_IDX, 2, 6 };
+    lookup[0x11] = (Instruction){ "ORA", op_ORA, addr_IZY, 2, 5 };
 
-    lookup[0x49] = (instruction){ "EOR", op_EOR, addr_IMM, 2, 2 };
-    lookup[0x45] = (instruction){ "EOR", op_EOR, addr_ZPO, 2, 3 };
-    lookup[0x55] = (instruction){ "EOR", op_EOR, addr_ZPX, 2, 4 };
-    lookup[0x4D] = (instruction){ "EOR", op_EOR, addr_ABS, 3, 4 };
-    lookup[0x5D] = (instruction){ "EOR", op_EOR, addr_ABX, 3, 4 };
-    lookup[0x59] = (instruction){ "EOR", op_EOR, addr_ABY, 3, 4 };
-    lookup[0x41] = (instruction){ "EOR", op_EOR, addr_IDX, 2, 6 };
-    lookup[0x51] = (instruction){ "EOR", op_EOR, addr_IZY, 2, 5 };
+    lookup[0x49] = (Instruction){ "EOR", op_EOR, addr_IMM, 2, 2 };
+    lookup[0x45] = (Instruction){ "EOR", op_EOR, addr_ZPO, 2, 3 };
+    lookup[0x55] = (Instruction){ "EOR", op_EOR, addr_ZPX, 2, 4 };
+    lookup[0x4D] = (Instruction){ "EOR", op_EOR, addr_ABS, 3, 4 };
+    lookup[0x5D] = (Instruction){ "EOR", op_EOR, addr_ABX, 3, 4 };
+    lookup[0x59] = (Instruction){ "EOR", op_EOR, addr_ABY, 3, 4 };
+    lookup[0x41] = (Instruction){ "EOR", op_EOR, addr_IDX, 2, 6 };
+    lookup[0x51] = (Instruction){ "EOR", op_EOR, addr_IZY, 2, 5 };
 
-    lookup[0xD2] = (instruction){ "CMP", op_CMP, addr_ZPO, 2, 5 };
-    lookup[0xC9] = (instruction){ "CMP", op_CMP, addr_IMM, 2, 2 };
-    lookup[0xC5] = (instruction){ "CMP", op_CMP, addr_ZPO, 2, 3 };
-    lookup[0xD5] = (instruction){ "CMP", op_CMP, addr_ZPX, 2, 4 };
-    lookup[0xCD] = (instruction){ "CMP", op_CMP, addr_ABS, 3, 4 };
-    lookup[0xDD] = (instruction){ "CMP", op_CMP, addr_ABX, 3, 4 };
-    lookup[0xD9] = (instruction){ "CMP", op_CMP, addr_ABY, 3, 4 };
-    lookup[0xC1] = (instruction){ "CMP", op_CMP, addr_IDX, 2, 6 };
-    lookup[0xD1] = (instruction){ "CMP", op_CMP, addr_IZY, 2, 5 };
+    lookup[0xD2] = (Instruction){ "CMP", op_CMP, addr_ZPO, 2, 5 };
+    lookup[0xC9] = (Instruction){ "CMP", op_CMP, addr_IMM, 2, 2 };
+    lookup[0xC5] = (Instruction){ "CMP", op_CMP, addr_ZPO, 2, 3 };
+    lookup[0xD5] = (Instruction){ "CMP", op_CMP, addr_ZPX, 2, 4 };
+    lookup[0xCD] = (Instruction){ "CMP", op_CMP, addr_ABS, 3, 4 };
+    lookup[0xDD] = (Instruction){ "CMP", op_CMP, addr_ABX, 3, 4 };
+    lookup[0xD9] = (Instruction){ "CMP", op_CMP, addr_ABY, 3, 4 };
+    lookup[0xC1] = (Instruction){ "CMP", op_CMP, addr_IDX, 2, 6 };
+    lookup[0xD1] = (Instruction){ "CMP", op_CMP, addr_IZY, 2, 5 };
 
-    lookup[0xE0] = (instruction){ "CPX", op_CPX, addr_IMM, 2, 2 };
-    lookup[0xE4] = (instruction){ "CPX", op_CPX, addr_ZPO, 2, 3 };
-    lookup[0xEC] = (instruction){ "CPX", op_CPX, addr_ABS, 3, 4 };
+    lookup[0xE0] = (Instruction){ "CPX", op_CPX, addr_IMM, 2, 2 };
+    lookup[0xE4] = (Instruction){ "CPX", op_CPX, addr_ZPO, 2, 3 };
+    lookup[0xEC] = (Instruction){ "CPX", op_CPX, addr_ABS, 3, 4 };
 
-    lookup[0xC0] = (instruction){ "CPY", op_CPY, addr_IMM, 2, 2 };
-    lookup[0xC4] = (instruction){ "CPY", op_CPY, addr_ZPO, 2, 3 };
-    lookup[0xCC] = (instruction){ "CPY", op_CPY, addr_ABS, 3, 4 };
+    lookup[0xC0] = (Instruction){ "CPY", op_CPY, addr_IMM, 2, 2 };
+    lookup[0xC4] = (Instruction){ "CPY", op_CPY, addr_ZPO, 2, 3 };
+    lookup[0xCC] = (Instruction){ "CPY", op_CPY, addr_ABS, 3, 4 };
     // Branching
-    lookup[0x90] = (instruction){ "BCC", op_BCC, addr_REL, 2, 2 };
-    lookup[0xB0] = (instruction){ "BCS", op_BCS, addr_REL, 2, 2 };
-    lookup[0xF0] = (instruction){ "BEQ", op_BEQ, addr_REL, 2, 2 };
-    lookup[0xD0] = (instruction){ "BNE", op_BNE, addr_REL, 2, 2 };
-    lookup[0x30] = (instruction){ "BMI", op_BMI, addr_REL, 2, 2 };
-    lookup[0x10] = (instruction){ "BPL", op_BPL, addr_REL, 2, 2 };
-    lookup[0x50] = (instruction){ "BVC", op_BVC, addr_REL, 2, 2 };
-    lookup[0x70] = (instruction){ "BVS", op_BVS, addr_REL, 2, 2 };
+    lookup[0x90] = (Instruction){ "BCC", op_BCC, addr_REL, 2, 2 };
+    lookup[0xB0] = (Instruction){ "BCS", op_BCS, addr_REL, 2, 2 };
+    lookup[0xF0] = (Instruction){ "BEQ", op_BEQ, addr_REL, 2, 2 };
+    lookup[0xD0] = (Instruction){ "BNE", op_BNE, addr_REL, 2, 2 };
+    lookup[0x30] = (Instruction){ "BMI", op_BMI, addr_REL, 2, 2 };
+    lookup[0x10] = (Instruction){ "BPL", op_BPL, addr_REL, 2, 2 };
+    lookup[0x50] = (Instruction){ "BVC", op_BVC, addr_REL, 2, 2 };
+    lookup[0x70] = (Instruction){ "BVS", op_BVS, addr_REL, 2, 2 };
     // SHIFTS AND ROTATES
-    lookup[0x0A] = (instruction){ "ASL", op_ASL, addr_ACC, 1, 2 };
-    lookup[0x06] = (instruction){ "ASL", op_ASL, addr_ZPO, 2, 5 };
-    lookup[0x16] = (instruction){ "ASL", op_ASL, addr_ZPX, 2, 6 };
-    lookup[0x0E] = (instruction){ "ASL", op_ASL, addr_ABS, 3, 6 };
-    lookup[0x1E] = (instruction){ "ASL", op_ASL, addr_ABX, 3, 7 };
+    lookup[0x0A] = (Instruction){ "ASL", op_ASL, addr_ACC, 1, 2 };
+    lookup[0x06] = (Instruction){ "ASL", op_ASL, addr_ZPO, 2, 5 };
+    lookup[0x16] = (Instruction){ "ASL", op_ASL, addr_ZPX, 2, 6 };
+    lookup[0x0E] = (Instruction){ "ASL", op_ASL, addr_ABS, 3, 6 };
+    lookup[0x1E] = (Instruction){ "ASL", op_ASL, addr_ABX, 3, 7 };
 
-    lookup[0x4A] = (instruction){ "LSR", op_LSR, addr_ACC, 1, 2 };
-    lookup[0x46] = (instruction){ "LSR", op_LSR, addr_ZPO, 2, 5 };
-    lookup[0x56] = (instruction){ "LSR", op_LSR, addr_ZPX, 2, 6 };
-    lookup[0x4E] = (instruction){ "LSR", op_LSR, addr_ABS, 3, 6 };
-    lookup[0x5E] = (instruction){ "LSR", op_LSR, addr_ABX, 3, 7 };
+    lookup[0x4A] = (Instruction){ "LSR", op_LSR, addr_ACC, 1, 2 };
+    lookup[0x46] = (Instruction){ "LSR", op_LSR, addr_ZPO, 2, 5 };
+    lookup[0x56] = (Instruction){ "LSR", op_LSR, addr_ZPX, 2, 6 };
+    lookup[0x4E] = (Instruction){ "LSR", op_LSR, addr_ABS, 3, 6 };
+    lookup[0x5E] = (Instruction){ "LSR", op_LSR, addr_ABX, 3, 7 };
 
-    lookup[0x2A] = (instruction){ "ROL", op_ROL, addr_ACC, 1, 2 };
-    lookup[0x26] = (instruction){ "ROL", op_ROL, addr_ZPO, 2, 5 };
-    lookup[0x36] = (instruction){ "ROL", op_ROL, addr_ZPX, 2, 6 };
-    lookup[0x2E] = (instruction){ "ROL", op_ROL, addr_ABS, 3, 6 };
-    lookup[0x3E] = (instruction){ "ROL", op_ROL, addr_ABX, 3, 7 };
+    lookup[0x2A] = (Instruction){ "ROL", op_ROL, addr_ACC, 1, 2 };
+    lookup[0x26] = (Instruction){ "ROL", op_ROL, addr_ZPO, 2, 5 };
+    lookup[0x36] = (Instruction){ "ROL", op_ROL, addr_ZPX, 2, 6 };
+    lookup[0x2E] = (Instruction){ "ROL", op_ROL, addr_ABS, 3, 6 };
+    lookup[0x3E] = (Instruction){ "ROL", op_ROL, addr_ABX, 3, 7 };
 
-    lookup[0x6A] = (instruction){ "ROR", op_ROR, addr_ACC, 1, 2 };
-    lookup[0x66] = (instruction){ "ROR", op_ROR, addr_ZPO, 2, 5 };
-    lookup[0x76] = (instruction){ "ROR", op_ROR, addr_ZPX, 2, 6 };
-    lookup[0x6E] = (instruction){ "ROR", op_ROR, addr_ABS, 3, 6 };
-    lookup[0x7E] = (instruction){ "ROR", op_ROR, addr_ABX, 3, 7 };
+    lookup[0x6A] = (Instruction){ "ROR", op_ROR, addr_ACC, 1, 2 };
+    lookup[0x66] = (Instruction){ "ROR", op_ROR, addr_ZPO, 2, 5 };
+    lookup[0x76] = (Instruction){ "ROR", op_ROR, addr_ZPX, 2, 6 };
+    lookup[0x6E] = (Instruction){ "ROR", op_ROR, addr_ABS, 3, 6 };
+    lookup[0x7E] = (Instruction){ "ROR", op_ROR, addr_ABX, 3, 7 };
     // CONtROL
-    lookup[0x4C] = (instruction){ "JMP", op_JMP, addr_ABS, 3, 3 };
-    lookup[0x6C] = (instruction){ "JMP", op_JMP, addr_IND, 3, 5 };
+    lookup[0x4C] = (Instruction){ "JMP", op_JMP, addr_ABS, 3, 3 };
+    lookup[0x6C] = (Instruction){ "JMP", op_JMP, addr_IND, 3, 5 };
 
-    lookup[0x20] = (instruction){ "JSR", op_JSR, addr_ABS, 3, 6 };
-    lookup[0x60] = (instruction){ "RTS", op_RTS, addr_IMP, 1, 6 };
-    lookup[0x40] = (instruction){ "RTI", op_RTI, addr_IMP, 1, 6 };
-    lookup[0x00] = (instruction){ "BRK", op_BRK, addr_IMP, 1, 7 };
+    lookup[0x20] = (Instruction){ "JSR", op_JSR, addr_ABS, 3, 6 };
+    lookup[0x60] = (Instruction){ "RTS", op_RTS, addr_IMP, 1, 6 };
+    lookup[0x40] = (Instruction){ "RTI", op_RTI, addr_IMP, 1, 6 };
+    lookup[0x00] = (Instruction){ "BRK", op_BRK, addr_IMP, 1, 7 };
 
-    lookup[0x1A] = (instruction){ "INC", op_INC, addr_ACC, 1, 2 };
-    lookup[0xE6] = (instruction){ "INC", op_INC, addr_ZPO, 2, 5 };
-    lookup[0xF6] = (instruction){ "INC", op_INC, addr_ZPX, 2, 6 };
-    lookup[0xEE] = (instruction){ "INC", op_INC, addr_ABS, 3, 6 };
-    lookup[0xFE] = (instruction){ "INC", op_INC, addr_ABX, 3, 7 };
+    lookup[0x1A] = (Instruction){ "INC", op_INC, addr_ACC, 1, 2 };
+    lookup[0xE6] = (Instruction){ "INC", op_INC, addr_ZPO, 2, 5 };
+    lookup[0xF6] = (Instruction){ "INC", op_INC, addr_ZPX, 2, 6 };
+    lookup[0xEE] = (Instruction){ "INC", op_INC, addr_ABS, 3, 6 };
+    lookup[0xFE] = (Instruction){ "INC", op_INC, addr_ABX, 3, 7 };
 
-    lookup[0x3A] = (instruction){ "DEC", op_DEC, addr_ACC, 1, 2 };
-    lookup[0xC6] = (instruction){ "DEC", op_DEC, addr_ZPO, 2, 5 };
-    lookup[0xD6] = (instruction){ "DEC", op_DEC, addr_ZPX, 2, 6 };
-    lookup[0xCE] = (instruction){ "DEC", op_DEC, addr_ABS, 3, 6 };
-    lookup[0xDE] = (instruction){ "DEC", op_DEC, addr_ABX, 3, 7 };
+    lookup[0x3A] = (Instruction){ "DEC", op_DEC, addr_ACC, 1, 2 };
+    lookup[0xC6] = (Instruction){ "DEC", op_DEC, addr_ZPO, 2, 5 };
+    lookup[0xD6] = (Instruction){ "DEC", op_DEC, addr_ZPX, 2, 6 };
+    lookup[0xCE] = (Instruction){ "DEC", op_DEC, addr_ABS, 3, 6 };
+    lookup[0xDE] = (Instruction){ "DEC", op_DEC, addr_ABX, 3, 7 };
 
-    lookup[0x18] = (instruction){ "CLC", op_CLC, addr_IMP, 1, 2 };
-    lookup[0x38] = (instruction){ "SEC", op_SEC, addr_IMP, 1, 2 };
-    lookup[0x58] = (instruction){ "CLI", op_CLI, addr_IMP, 1, 2 };
-    lookup[0x78] = (instruction){ "SEI", op_SEI, addr_IMP, 1, 2 };
-    lookup[0xB8] = (instruction){ "CLV", op_CLV, addr_IMP, 1, 2 };
-    lookup[0xD8] = (instruction){ "CLD", op_CLD, addr_IMP, 1, 2 };
-    lookup[0xF8] = (instruction){ "SED", op_SED, addr_IMP, 1, 2 };
+    lookup[0x18] = (Instruction){ "CLC", op_CLC, addr_IMP, 1, 2 };
+    lookup[0x38] = (Instruction){ "SEC", op_SEC, addr_IMP, 1, 2 };
+    lookup[0x58] = (Instruction){ "CLI", op_CLI, addr_IMP, 1, 2 };
+    lookup[0x78] = (Instruction){ "SEI", op_SEI, addr_IMP, 1, 2 };
+    lookup[0xB8] = (Instruction){ "CLV", op_CLV, addr_IMP, 1, 2 };
+    lookup[0xD8] = (Instruction){ "CLD", op_CLD, addr_IMP, 1, 2 };
+    lookup[0xF8] = (Instruction){ "SED", op_SED, addr_IMP, 1, 2 };
 
-    lookup[0x89] = (instruction){ "BIT", op_BIT, addr_IMM, 2, 2 };
-    lookup[0x24] = (instruction){ "BIT", op_BIT, addr_ZPO, 2, 3 };
-    lookup[0x34] = (instruction){ "BIT", op_BIT, addr_ZPX, 2, 4 };
-    lookup[0x2C] = (instruction){ "BIT", op_BIT, addr_ABS, 3, 4 };
-    lookup[0x3C] = (instruction){ "BIT", op_BIT, addr_ABX, 3, 4 };
+    lookup[0x89] = (Instruction){ "BIT", op_BIT, addr_IMM, 2, 2 };
+    lookup[0x24] = (Instruction){ "BIT", op_BIT, addr_ZPO, 2, 3 };
+    lookup[0x34] = (Instruction){ "BIT", op_BIT, addr_ZPX, 2, 4 };
+    lookup[0x2C] = (Instruction){ "BIT", op_BIT, addr_ABS, 3, 4 };
+    lookup[0x3C] = (Instruction){ "BIT", op_BIT, addr_ABX, 3, 4 };
 
 
 

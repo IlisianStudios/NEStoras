@@ -4,7 +4,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#endif //NESTORAS_CARTRIGE_H
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -31,9 +30,13 @@ struct Cartridge{
 
 extern Cartridge *cartridge;
 
-bool cartridge_load(Cartridge *cartridge, const char* path);
-void cartridge_free(Cartridge *cart);
+bool cartridge_load(const char* path);
+void cartridge_free(void);
+void try_free_cartridge(void);
 
 #ifdef __cplusplus
 }
 #endif
+
+#endif //NESTORAS_CARTRIGE_H
+

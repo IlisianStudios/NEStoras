@@ -65,7 +65,7 @@ void log_cpu_state(CPU *cpu, Instruction inst, uint16_t pc) {
     printf("%-31s", operand);
 
     // Print CPU registers
-    printf("A:%02X X:%02X Y:%02X P:%02X SP:%02X CYC:%llu\n",
+    printf("A:%02X X:%02X Y:%02X P:%02X SP:%02X CYC:%llu\tNO PPU CYCLES, THEY ARE SKIPPED\n",
            cpu->a,
            cpu->x,
            cpu->y,

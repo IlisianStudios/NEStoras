@@ -32,3 +32,27 @@ target_link_libraries(NEStoras PRIVATE SDL2::SDL2)
 target_compile_options(NEStoras PRIVATE
     $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Wall -Wextra -Wpedantic -lSDL2 -lSDL2_ttf>
 )
+
+# Define the source and destination paths
+set(RES_FILE_LOG "${CMAKE_CURRENT_SOURCE_DIR}/testlog/nestest.log") # Adjust path to your folder
+set(DEST_FILE_LOG "${CMAKE_CURRENT_BINARY_DIR}/nestest.log")
+# Define the source and destination paths
+set(RES_FILE_ROM "${CMAKE_CURRENT_SOURCE_DIR}/testroms/nestest.nes") # Adjust path to your folder
+set(DEST_FILE_ROM "${CMAKE_CURRENT_BINARY_DIR}/nestest.nes")
+
+# Copy the file during the build process
+add_custom_command(
+        TARGET NEStoras POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+        "${RES_FILE_LOG}"
+        "${DEST_FILE_LOG}"
+        COMMENT "Copying test resource to build directory"
+)
+
+add_custom_command(
+        TARGET NEStoras POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+        "${RES_FILE_ROM}"
+        "${DEST_FILE_ROM}"
+        COMMENT "Copying test resource to build directory"
+)

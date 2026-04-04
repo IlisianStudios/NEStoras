@@ -137,11 +137,6 @@ void cpu_step(CPU *cpu) {
     Instruction inst = lookup[cpu->fetched];
 
     uint8_t extra1 = inst.addrmode(cpu);
-    uint8_t extra2 = inst.operate(cpu);
-
-    uint8_t cycles = inst.cycles + (extra1 & extra2);
-    cpu->cycles = cycles;
-    cpu->total_cycles += cycles;
 
     if (cpu->testing_mode)
         log_cpu_state(cpu, inst, pc_snapshot);  // pass snapshot
@@ -151,7 +146,11 @@ void cpu_step(CPU *cpu) {
         if (!nestest_compare(&nestest_log, cpu, &inst, pc_snapshot))
             exit(1);
     #endif
+    uint8_t extra2 = inst.operate(cpu);
 
+    uint8_t cycles = inst.cycles + (extra1 & extra2);
+    cpu->cycles = cycles;
+    cpu->total_cycles += cpu->cycles ;
 }
 
 void set_flag(CPU *cpu, const uint8_t flag, const bool value) {

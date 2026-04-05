@@ -93,6 +93,19 @@ uint8_t op_BIT(CPU *cpu);
 
 uint8_t op_NOOP(CPU *cpu);
 
+uint8_t op_LAX(CPU *cpu);
+uint8_t op_SAX(CPU *cpu);
+uint8_t op_DCP(CPU *cpu);
+uint8_t op_ISC(CPU *cpu);
+uint8_t op_SLO(CPU *cpu);
+uint8_t op_RLA(CPU *cpu);
+uint8_t op_SRE(CPU *cpu);
+uint8_t op_RRA(CPU *cpu);
+uint8_t op_ANC(CPU *cpu);
+uint8_t op_ALR(CPU *cpu);
+uint8_t op_ARR(CPU *cpu);
+uint8_t op_AXS(CPU *cpu);
+
 uint8_t addr_IMP(CPU *cpu);
 uint8_t addr_ACC(CPU *cpu);
 uint8_t addr_IMM(CPU *cpu);

@@ -417,6 +417,109 @@ uint8_t op_NOOP(CPU *cpu) {
     return 1;
 }
 
+uint8_t op_LAX(CPU *cpu) {
+    cpu->a = bus_read(cpu->addr_abs);
+    cpu->x = cpu->a;
+    update_nz(cpu, cpu->x);
+
+    return 0;
+}
+
+uint8_t op_SAX(CPU *cpu) {
+    bus_write(cpu->addr_abs, cpu->a & cpu->x);
+    return 0;
+}
+
+uint8_t op_DCP(CPU *cpu) {
+    uint8_t const value = bus_read(cpu->addr_abs) -1;
+    bus_write(cpu->addr_abs, value);
+    uint8_t const result = cpu->a - value;
+    set_flag(cpu, FLAG_C, cpu->a >= value);
+    update_nz(cpu, result);
+    return 0;
+}
+
+uint8_t op_ISC(CPU *cpu) {
+    uint8_t const value = bus_read(cpu->addr_abs) + 1;
+    bus_write(cpu->addr_abs, value);
+    adc_impl(cpu, ~value);
+    return 0;
+}
+
+uint8_t op_SLO(CPU *cpu) {
+    uint8_t value = bus_read(cpu->addr_abs);
+    set_flag(cpu, FLAG_C, value & 0x80);
+    value <<= 1;
+    bus_write(cpu->addr_abs, value);
+    cpu->a |= value;
+    update_nz(cpu, value);
+    return 0;
+}
+
+uint8_t op_RLA(CPU *cpu) {
+    uint8_t val = bus_read(cpu->addr_abs);
+    uint8_t old_c = get_flag(cpu, FLAG_C);
+    set_flag(cpu, FLAG_C, val & 0x80);
+    val = (val << 1) | old_c;
+    bus_write(cpu->addr_abs, val);
+    cpu->a &= val;
+    update_nz(cpu, cpu->a);
+    return 0;
+}
+
+uint8_t op_SRE(CPU *cpu) {
+    uint8_t val = bus_read(cpu->addr_abs);
+    set_flag(cpu, FLAG_C, val & 0x01);
+    val >>= 1;
+    bus_write(cpu->addr_abs, val);
+    cpu->a ^= val;
+    update_nz(cpu, cpu->a);
+    return 0;
+}
+
+uint8_t op_RRA(CPU *cpu) {
+    uint8_t val = bus_read(cpu->addr_abs);
+    uint8_t old_c = get_flag(cpu, FLAG_C);
+    set_flag(cpu, FLAG_C, val & 0x01);
+    val = (val >> 1) | (old_c << 7);
+    bus_write(cpu->addr_abs, val);
+    adc_impl(cpu, val);
+    return 0;
+}
+
+uint8_t op_ANC(CPU *cpu) {
+    cpu->a &= bus_read(cpu->addr_abs);
+    update_nz(cpu, cpu->a);
+    set_flag(cpu, FLAG_C, cpu->a & 0x80);
+    return 0;
+}
+
+uint8_t op_ALR(CPU *cpu) {
+    cpu->a &= bus_read(cpu->addr_abs);
+    set_flag(cpu, FLAG_C, cpu->a & 0x01);
+    cpu->a >>= 1;
+    update_nz(cpu, cpu->a);
+    return 0;
+}
+
+uint8_t op_ARR(CPU *cpu) {
+    cpu->a &= bus_read(cpu->addr_abs);
+    cpu->a = (cpu->a >> 1) | (get_flag(cpu, FLAG_C) << 7);
+    update_nz(cpu, cpu->a);
+    set_flag(cpu, FLAG_C, cpu->a & 0x40);
+    set_flag(cpu, FLAG_V, ((cpu->a >> 6) ^ (cpu->a >> 5)) & 1);
+    return 0;
+}
+
+uint8_t op_AXS(CPU *cpu) {
+    uint8_t val = bus_read(cpu->addr_abs);
+    uint8_t ax = cpu->a & cpu->x;
+    cpu->x = ax - val;
+    set_flag(cpu, FLAG_C, ax >= val);
+    update_nz(cpu, cpu->x);
+    return 0;
+}
+
 uint8_t addr_IMP(CPU *cpu) {
     (void)cpu;
     return 0;
@@ -757,12 +860,86 @@ void init_lookup(void) {
 
     lookup[0xEB] = (Instruction){ "*SBC", op_SBC, addr_IMM, 2, 2 };
 
+    // LAX: Load A and X
+    lookup[0xA3] = (Instruction){ "*LAX", op_LAX, addr_IDX, 2, 6 };
+    lookup[0xA7] = (Instruction){ "*LAX", op_LAX, addr_ZPO, 2, 3 };
+    lookup[0xAF] = (Instruction){ "*LAX", op_LAX, addr_ABS, 3, 4 };
+    lookup[0xB3] = (Instruction){ "*LAX", op_LAX, addr_IZY, 2, 5 };
+    lookup[0xB7] = (Instruction){ "*LAX", op_LAX, addr_ZPY, 2, 4 };
+    lookup[0xBF] = (Instruction){ "*LAX", op_LAX, addr_ABY, 3, 4 };
 
+    // SAX: Store A AND X
+    lookup[0x83] = (Instruction){ "*SAX", op_SAX, addr_IDX, 2, 6 };
+    lookup[0x87] = (Instruction){ "*SAX", op_SAX, addr_ZPO, 2, 3 };
+    lookup[0x8F] = (Instruction){ "*SAX", op_SAX, addr_ABS, 3, 4 };
+    lookup[0x97] = (Instruction){ "*SAX", op_SAX, addr_ZPY, 2, 4 };
 
+    // DCP: Decrement then Compare
+    lookup[0xC3] = (Instruction){ "*DCP", op_DCP, addr_IDX, 2, 8 };
+    lookup[0xC7] = (Instruction){ "*DCP", op_DCP, addr_ZPO, 2, 5 };
+    lookup[0xCF] = (Instruction){ "*DCP", op_DCP, addr_ABS, 3, 6 };
+    lookup[0xD3] = (Instruction){ "*DCP", op_DCP, addr_IZY, 2, 8 };
+    lookup[0xD7] = (Instruction){ "*DCP", op_DCP, addr_ZPX, 2, 6 };
+    lookup[0xDB] = (Instruction){ "*DCP", op_DCP, addr_ABY, 3, 7 };
+    lookup[0xDF] = (Instruction){ "*DCP", op_DCP, addr_ABX, 3, 7 };
 
+    // ISC (ISB): Increment then Subtract
+    lookup[0xE3] = (Instruction){ "*ISB", op_ISC, addr_IDX, 2, 8 };
+    lookup[0xE7] = (Instruction){ "*ISB", op_ISC, addr_ZPO, 2, 5 };
+    lookup[0xEF] = (Instruction){ "*ISB", op_ISC, addr_ABS, 3, 6 };
+    lookup[0xF3] = (Instruction){ "*ISB", op_ISC, addr_IZY, 2, 8 };
+    lookup[0xF7] = (Instruction){ "*ISB", op_ISC, addr_ZPX, 2, 6 };
+    lookup[0xFB] = (Instruction){ "*ISB", op_ISC, addr_ABY, 3, 7 };
+    lookup[0xFF] = (Instruction){ "*ISB", op_ISC, addr_ABX, 3, 7 };
 
+    // SLO: ASL then ORA
+    lookup[0x03] = (Instruction){ "*SLO", op_SLO, addr_IDX, 2, 8 };
+    lookup[0x07] = (Instruction){ "*SLO", op_SLO, addr_ZPO, 2, 5 };
+    lookup[0x0F] = (Instruction){ "*SLO", op_SLO, addr_ABS, 3, 6 };
+    lookup[0x13] = (Instruction){ "*SLO", op_SLO, addr_IZY, 2, 8 };
+    lookup[0x17] = (Instruction){ "*SLO", op_SLO, addr_ZPX, 2, 6 };
+    lookup[0x1B] = (Instruction){ "*SLO", op_SLO, addr_ABY, 3, 7 };
+    lookup[0x1F] = (Instruction){ "*SLO", op_SLO, addr_ABX, 3, 7 };
 
+    // RLA: ROL then AND
+    lookup[0x23] = (Instruction){ "*RLA", op_RLA, addr_IDX, 2, 8 };
+    lookup[0x27] = (Instruction){ "*RLA", op_RLA, addr_ZPO, 2, 5 };
+    lookup[0x2F] = (Instruction){ "*RLA", op_RLA, addr_ABS, 3, 6 };
+    lookup[0x33] = (Instruction){ "*RLA", op_RLA, addr_IZY, 2, 8 };
+    lookup[0x37] = (Instruction){ "*RLA", op_RLA, addr_ZPX, 2, 6 };
+    lookup[0x3B] = (Instruction){ "*RLA", op_RLA, addr_ABY, 3, 7 };
+    lookup[0x3F] = (Instruction){ "*RLA", op_RLA, addr_ABX, 3, 7 };
 
+    // SRE: LSR then EOR
+    lookup[0x43] = (Instruction){ "*SRE", op_SRE, addr_IDX, 2, 8 };
+    lookup[0x47] = (Instruction){ "*SRE", op_SRE, addr_ZPO, 2, 5 };
+    lookup[0x4F] = (Instruction){ "*SRE", op_SRE, addr_ABS, 3, 6 };
+    lookup[0x53] = (Instruction){ "*SRE", op_SRE, addr_IZY, 2, 8 };
+    lookup[0x57] = (Instruction){ "*SRE", op_SRE, addr_ZPX, 2, 6 };
+    lookup[0x5B] = (Instruction){ "*SRE", op_SRE, addr_ABY, 3, 7 };
+    lookup[0x5F] = (Instruction){ "*SRE", op_SRE, addr_ABX, 3, 7 };
+
+    // RRA: ROR then ADC
+    lookup[0x63] = (Instruction){ "*RRA", op_RRA, addr_IDX, 2, 8 };
+    lookup[0x67] = (Instruction){ "*RRA", op_RRA, addr_ZPO, 2, 5 };
+    lookup[0x6F] = (Instruction){ "*RRA", op_RRA, addr_ABS, 3, 6 };
+    lookup[0x73] = (Instruction){ "*RRA", op_RRA, addr_IZY, 2, 8 };
+    lookup[0x77] = (Instruction){ "*RRA", op_RRA, addr_ZPX, 2, 6 };
+    lookup[0x7B] = (Instruction){ "*RRA", op_RRA, addr_ABY, 3, 7 };
+    lookup[0x7F] = (Instruction){ "*RRA", op_RRA, addr_ABX, 3, 7 };
+
+    // ANC: AND #imm, copy N to C
+    lookup[0x0B] = (Instruction){ "*ANC", op_ANC, addr_IMM, 2, 2 };
+    lookup[0x2B] = (Instruction){ "*ANC", op_ANC, addr_IMM, 2, 2 };
+
+    // ALR: AND #imm then LSR A
+    lookup[0x4B] = (Instruction){ "*ALR", op_ALR, addr_IMM, 2, 2 };
+
+    // ARR: AND #imm then ROR A (special flags)
+    lookup[0x6B] = (Instruction){ "*ARR", op_ARR, addr_IMM, 2, 2 };
+
+    // AXS (SBX): X = (A & X) - #imm
+    lookup[0xCB] = (Instruction){ "*AXS", op_AXS, addr_IMM, 2, 2 };
 }
 
 

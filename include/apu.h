@@ -69,6 +69,27 @@ typedef struct {
 
 static Triangle triangle;
 
+static const uint16_t NOISE_PERIOD_TABLE[16] = {
+    4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068
+};
+
+typedef struct {
+    uint8_t  length_counter;
+    bool     length_halt;       // also envelope loop
+    bool     constant_vol;
+    uint8_t  envelope_vol;
+    uint8_t  envelope_decay;
+    bool     envelope_start;
+    uint8_t  envelope_divider;
+    uint8_t  volume;
+    bool     mode;              // false = bit6 feedback, true = bit1 feedback
+    uint16_t timer_period;
+    uint16_t timer_current;
+    uint16_t lfsr;              // 15-bit shift register, must init to 1
+} Noise;
+
+static Noise noise;
+
 typedef struct {
     // --- frame sequencer ---
     uint32_t frame_cycles;   // counts up, resets at period
@@ -92,6 +113,7 @@ typedef struct {
 
 extern APU apu;
 
+void apu_init(void);
 void apu_step(CPU *cpu);
 float apu_mix(void);
 uint8_t apu_read(uint16_t addr); // $4015 only

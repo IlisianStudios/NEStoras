@@ -5,6 +5,10 @@
 
 APU apu;
 
+void apu_init(void) {
+    noise.lfsr = 1;
+}
+
 // NTSC periods (in CPU cycles):
 static const uint32_t FRAME_PERIOD_4[4] = { 3728, 7456, 11185, 14914 };
 static const uint32_t FRAME_PERIOD_5[5] = { 3728, 7456, 11185, 14914, 18640 };
@@ -63,9 +67,29 @@ void half_frame_pulse(Pulse *pulse) {
     }
 }
 
+static void clock_envelope(Noise *n) {
+    if (n->envelope_start) {
+        n->envelope_start   = false;
+        n->envelope_decay   = 15;
+        n->envelope_divider = n->envelope_vol;
+    } else {
+        if (n->envelope_divider > 0) {
+            n->envelope_divider--;
+        } else {
+            n->envelope_divider = n->envelope_vol;
+            if (n->envelope_decay > 0)
+                n->envelope_decay--;
+            else if (n->length_halt)
+                n->envelope_decay = 15;
+        }
+    }
+    n->volume = n->constant_vol ? n->envelope_vol : n->envelope_decay;
+}
+
 void clock_quarter_frame(void) {
     quarter_frame_pulse(&pulse1);
     quarter_frame_pulse(&pulse2);
+    clock_envelope(&noise);
 
     // Triangle linear counter
     if (triangle.linear_reload_flag)
@@ -83,6 +107,10 @@ void clock_half_frame(void) {
     // Triangle length counter
     if (!triangle.length_halt && triangle.length_counter > 0)
         triangle.length_counter--;
+
+    // Noise length counter
+    if (!noise.length_halt && noise.length_counter > 0)
+        noise.length_counter--;
 }
 
 static uint8_t pulse_output(Pulse *p, bool enabled) {
@@ -105,6 +133,16 @@ static void clock_pulse_timer(Pulse *p) {
 void apu_step(CPU *cpu) {
     clock_pulse_timer(&pulse1);
     clock_pulse_timer(&pulse2);
+
+    // Noise timer + LFSR
+    if (noise.timer_current == 0) {
+        noise.timer_current = noise.timer_period;
+        uint16_t feedback = (noise.lfsr & 1) ^
+                            ((noise.mode ? (noise.lfsr >> 6) : (noise.lfsr >> 1)) & 1);
+        noise.lfsr = (noise.lfsr >> 1) | (feedback << 14);
+    } else {
+        noise.timer_current--;
+    }
 
     // Triangle timer
     if (triangle.timer_current == 0) {
@@ -170,9 +208,14 @@ float apu_mix(void) {
     if (apu.triangle_enabled && triangle.length_counter > 0 && triangle.linear_counter > 0)
         tri = TRIANGLE_TABLE[triangle.seq_pos];
 
+    uint8_t noi = 0;
+    if (apu.noise_enabled && noise.length_counter > 0 && (noise.lfsr & 1) == 0)
+        noi = noise.volume;
+
     float tnd_out = 0.0f;
-    if (tri > 0)
-        tnd_out = 159.79f / (1.0f / ((float)tri / 8227.0f) + 100.0f);
+    float tnd_sum = (float)tri / 8227.0f + (float)noi / 12241.0f;
+    if (tnd_sum > 0.0f)
+        tnd_out = 159.79f / (1.0f / tnd_sum + 100.0f);
 
     return pulse_out + tnd_out;
 }
@@ -265,7 +308,18 @@ void apu_write(uint16_t addr, uint8_t data) {
             triangle.length_counter     = LENGTH_TABLE[(data >> 3) & 0x1F];
             triangle.linear_reload_flag = true;
             break;
-        // $400C-$400F: noise
-        // add cases as you implement
+        case 0x400C:
+            noise.length_halt  = (data >> 5) & 1;
+            noise.constant_vol = (data >> 4) & 1;
+            noise.envelope_vol = data & 0x0F;
+            break;
+        case 0x400E:
+            noise.mode         = (data >> 7) & 1;
+            noise.timer_period = NOISE_PERIOD_TABLE[data & 0x0F];
+            break;
+        case 0x400F:
+            noise.length_counter  = LENGTH_TABLE[(data >> 3) & 0x1F];
+            noise.envelope_start  = true;
+            break;
     }
 }

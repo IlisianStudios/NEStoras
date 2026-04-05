@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include <SDL2/SDL.h>
 
+#include "apu.h"
 #include "bus.h"
 #include "cartridge.h"
 #include "cpu.h"
@@ -68,6 +69,7 @@ void init(void) {
     SDL_EventState(SDL_DROPFILE, SDL_ENABLE);
     init_audio();
     ring_buffer_init();
+    apu_init();
 }
 
 SDL_Window* setup_window(void) {

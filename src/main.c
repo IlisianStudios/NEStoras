@@ -29,7 +29,8 @@ void debug_nestest(void) {
 }
 
 void init_audio(void) {
-    SDL_AudioSpec want, have;
+    SDL_AudioSpec want;
+    SDL_AudioSpec have;
     SDL_zero(want);
 
     want.freq = 44100;          // 44.1 kHz

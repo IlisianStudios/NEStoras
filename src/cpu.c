@@ -140,6 +140,29 @@ void audio_callback(void *userdata, Uint8 *stream, int len) {
     int samplesCount = len / sizeof(Sint16);
 }
 
+void run_cycles(CPU *cpu, uint64_t cycles) {
+    uint32_t ran = 0;
+
+    while (ran < cycles) {
+        cpu_step(cpu);
+
+        // cpu.cycles is how many cycles THIS instruction took (set inside cpu_step).
+        // Tick the APU once per CPU cycle.
+        for (uint8_t i = 0; i < cpu->cycles; i++) {
+            //apu_tick();
+        }
+
+        ran += cpu->cycles;
+
+        // In unbound mode we were called with max_cycles=1,
+        // so this breaks after the first instruction.
+        if (cycles == 1) break;
+
+        // Safety: stop if somehow cycles is 0 (prevents infinite loop).
+        if (cpu->cycles == 0) break;
+    }
+}
+
 void fetch(CPU *cpu) {
     const uint8_t opcode = bus_read(advance_pc(cpu));
     cpu->fetched = opcode;

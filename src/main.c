@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <string.h>
 #include <stdbool.h>
 #include <SDL2/SDL.h>
 
@@ -66,6 +65,7 @@ void init(void) {
 
     SDL_EventState(SDL_DROPFILE, SDL_ENABLE);
     init_audio();
+    timing_init(&timing, FIXED);
 }
 
 SDL_Window* setup_window(void) {
@@ -145,9 +145,16 @@ int main(int argc, char** argv) {
 
     while (running) {
         SDL2_loop();
-        if (cartridge != NULL) {
-            cpu_step(&cpu);
-        }
+
+        if (cartridge == NULL) continue;
+
+        uint32_t cycles_to_run = timing_update(&timing);
+
+        if (cycles_to_run == UINT32_MAX)
+            run_cycles(&cpu, 1);
+        else
+            run_cycles(&cpu, cycles_to_run);
+
     }
 
     try_free_cartridge();

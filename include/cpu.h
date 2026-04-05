@@ -3,12 +3,14 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "bus.h"
+#include "timing.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 
+Timing timing;
 
 // Flag bit positions
 #define FLAG_C 0x01  // Carry
@@ -65,6 +67,7 @@ static inline uint8_t stack_pop(CPU *cpu){
 
 void audio_callback(void *userdata, Uint8 *stream, int len);
 
+void run_cycles(CPU *cpu, uint64_t cycles);
 
 #ifdef __cplusplus
 }

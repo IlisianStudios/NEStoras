@@ -14,6 +14,10 @@ add_executable(NEStoras
     src/instruction.c
     src/cartridge.c
     src/mappers.c
+        include/apu.h
+        src/apu.c
+        src/timing.c
+        include/timing.h
 )
 
 target_include_directories(NEStoras PRIVATE

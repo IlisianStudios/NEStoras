@@ -422,7 +422,7 @@ uint8_t op_LAX(CPU *cpu) {
     cpu->x = cpu->a;
     update_nz(cpu, cpu->x);
 
-    return 0;
+    return 1;
 }
 
 uint8_t op_SAX(CPU *cpu) {
@@ -452,7 +452,7 @@ uint8_t op_SLO(CPU *cpu) {
     value <<= 1;
     bus_write(cpu->addr_abs, value);
     cpu->a |= value;
-    update_nz(cpu, value);
+    update_nz(cpu, cpu->a);
     return 0;
 }
 

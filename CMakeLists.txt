@@ -18,6 +18,8 @@ add_executable(NEStoras
         src/apu.c
         src/timing.c
         include/timing.h
+        src/ringbuffer.c
+        include/ringbuffer.h
 )
 
 target_include_directories(NEStoras PRIVATE

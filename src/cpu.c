@@ -3,6 +3,8 @@
 #include "instruction.h"
 #include "nestest_compare.h"
 #include <stdio.h>
+#include "apu.h"
+#include "ringbuffer.h"
 
 NestestLog nestest_log = {0};
 
@@ -133,11 +135,11 @@ void cpu_irq(CPU *cpu){
 void audio_callback(void *userdata, Uint8 *stream, int len) {
     // SDL2 requires you to initialize the buffer.
     // Fill with 0 (silence) if no data is ready.
-    SDL_memset(stream, 0, len);
-
-    // Cast stream to (Sint16*) to handle signed 16-bit data
-    Sint16 *buffer = (Sint16 *)stream;
-    int samplesCount = len / sizeof(Sint16);
+    int16_t *out = (int16_t *)stream;
+    int num_samples = len / sizeof(int16_t);
+    for (int i = 0; i < num_samples; i++) {
+        out[i] = ring_buffer_pop();
+    }
 }
 
 void run_cycles(CPU *cpu, uint64_t cycles) {

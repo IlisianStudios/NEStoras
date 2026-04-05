@@ -7,6 +7,7 @@
 #include "cpu.h"
 #include "instruction.h"
 #include "nestest_compare.h"
+#include "ringbuffer.h"
 
 bool running = true;
 CPU cpu;
@@ -34,7 +35,7 @@ void init_audio(void) {
     want.freq = 44100;          // 44.1 kHz
     want.format = AUDIO_S16SYS; // Signed 16-bit, system byte order
     want.channels = 1;          // Mono
-    want.samples = 4096;        // Buffer size (must be power of 2)
+    want.samples = 2048;        // Buffer size (must be power of 2)
     want.callback = audio_callback;
     want.userdata = NULL;
 
@@ -65,7 +66,7 @@ void init(void) {
 
     SDL_EventState(SDL_DROPFILE, SDL_ENABLE);
     init_audio();
-    timing_init(&timing, FIXED);
+    ring_buffer_init();
 }
 
 SDL_Window* setup_window(void) {
@@ -142,7 +143,7 @@ int main(int argc, char** argv) {
     debug_nestest();
 #endif
 
-
+    timing_init(&timing, FIXED);
     while (running) {
         SDL2_loop();
 

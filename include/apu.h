@@ -57,6 +57,19 @@ static  Pulse pulse1;
 static  Pulse pulse2;
 
 typedef struct {
+    uint8_t  seq_pos;
+    uint16_t timer_period;
+    uint16_t timer_current;
+    uint8_t  length_counter;
+    bool     length_halt;        // also "linear counter control"
+    uint8_t  linear_counter;
+    uint8_t  linear_reload;      // reload value written to $4008
+    bool     linear_reload_flag;
+} Triangle;
+
+static Triangle triangle;
+
+typedef struct {
     // --- frame sequencer ---
     uint32_t frame_cycles;   // counts up, resets at period
     uint8_t  frame_mode;     // 0 = 4-step, 1 = 5-step

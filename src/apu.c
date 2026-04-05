@@ -66,11 +66,23 @@ void half_frame_pulse(Pulse *pulse) {
 void clock_quarter_frame(void) {
     quarter_frame_pulse(&pulse1);
     quarter_frame_pulse(&pulse2);
+
+    // Triangle linear counter
+    if (triangle.linear_reload_flag)
+        triangle.linear_counter = triangle.linear_reload;
+    else if (triangle.linear_counter > 0)
+        triangle.linear_counter--;
+    if (!triangle.length_halt)
+        triangle.linear_reload_flag = false;
 }
 
 void clock_half_frame(void) {
     half_frame_pulse(&pulse1);
     half_frame_pulse(&pulse2);
+
+    // Triangle length counter
+    if (!triangle.length_halt && triangle.length_counter > 0)
+        triangle.length_counter--;
 }
 
 static uint8_t pulse_output(Pulse *p, bool enabled) {
@@ -93,6 +105,15 @@ static void clock_pulse_timer(Pulse *p) {
 void apu_step(CPU *cpu) {
     clock_pulse_timer(&pulse1);
     clock_pulse_timer(&pulse2);
+
+    // Triangle timer
+    if (triangle.timer_current == 0) {
+        triangle.timer_current = triangle.timer_period;
+        if (triangle.length_counter > 0 && triangle.linear_counter > 0)
+            triangle.seq_pos = (triangle.seq_pos + 1) & 31;
+    } else {
+        triangle.timer_current--;
+    }
 
     apu.frame_cycles++;
 
@@ -138,7 +159,22 @@ void apu_step(CPU *cpu) {
 }
 
 float apu_mix(void) {
-    return 0;
+    uint8_t p1 = pulse_output(&pulse1, apu.pulse1_enabled);
+    uint8_t p2 = pulse_output(&pulse2, apu.pulse2_enabled);
+
+    float pulse_out = 0.0f;
+    if (p1 + p2 > 0)
+        pulse_out = 95.88f / (8128.0f / (float)(p1 + p2) + 100.0f);
+
+    uint8_t tri = 0;
+    if (apu.triangle_enabled && triangle.length_counter > 0 && triangle.linear_counter > 0)
+        tri = TRIANGLE_TABLE[triangle.seq_pos];
+
+    float tnd_out = 0.0f;
+    if (tri > 0)
+        tnd_out = 159.79f / (1.0f / ((float)tri / 8227.0f) + 100.0f);
+
+    return pulse_out + tnd_out;
 }
 
 uint8_t apu_read(uint16_t addr) {
@@ -217,8 +253,19 @@ void apu_write(uint16_t addr, uint8_t data) {
             pulse2.envelope_start = true;
             pulse2.seq_pos = 0;
             break;
-            // $4008-$400B: triangle
-            // $400C-$400F: noise
-            // add cases as you implement
+            case 0x4008:
+            triangle.length_halt        = (data >> 7) & 1;
+            triangle.linear_reload      = data & 0x7F;
+            break;
+        case 0x400A:
+            triangle.timer_period = (triangle.timer_period & 0x700) | data;
+            break;
+        case 0x400B:
+            triangle.timer_period       = (triangle.timer_period & 0x00FF) | ((data & 0x07) << 8);
+            triangle.length_counter     = LENGTH_TABLE[(data >> 3) & 0x1F];
+            triangle.linear_reload_flag = true;
+            break;
+        // $400C-$400F: noise
+        // add cases as you implement
     }
 }

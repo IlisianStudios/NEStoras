@@ -151,7 +151,7 @@ void run_cycles(CPU *cpu, uint64_t cycles) {
         // cpu.cycles is how many cycles THIS instruction took (set inside cpu_step).
         // Tick the APU once per CPU cycle.
         for (uint8_t i = 0; i < cpu->cycles; i++) {
-            //apu_tick();
+            apu_step(cpu);
         }
 
         ran += cpu->cycles;

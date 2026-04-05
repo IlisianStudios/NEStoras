@@ -21,7 +21,6 @@ typedef struct {
 
 static RingBuffer ring;
 
-// Returns the number of samples currently available to read.
 static inline uint32_t ring_buffer_available(void) {
     return (ring.write_pos - ring.read_pos) & RING_BUFFER_MASK;
 }

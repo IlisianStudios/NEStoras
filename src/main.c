@@ -10,7 +10,7 @@
 #include "ringbuffer.h"
 
 bool running = true;
-CPU cpu;
+static CPU cpu;
 
 void debug_nestest(void) {
     printf("DEBUG mode enabled\n");

@@ -7,18 +7,21 @@ extern "C" {
 #endif
 extern uint8_t ram[2048];
 
+
+extern uint8_t apu_read(uint16_t addr);
+extern void apu_write(uint16_t addr, uint8_t data);
+
 static inline uint8_t apu_io_read(uint16_t addr) {
-    (void) addr;
-    return 0x00;
+    return apu_read(addr);
+}
+
+static inline void apu_io_write(uint16_t addr, uint8_t data) {
+    apu_write(addr, data);
 }
 
 static inline uint8_t ppu_register_read(uint16_t addr) {
     (void) addr;
     return 0x00;
-}
-
-static inline void apu_io_write(uint16_t addr, uint8_t data) {
-    (void)addr; (void)data;
 }
 
 static inline void ppu_register_write(uint16_t addr, uint8_t data) {
@@ -54,6 +57,7 @@ static inline void bus_write(const uint16_t addr, const uint8_t data) {
     }
     cartrige_write(addr, data);
 }
+
 
 #ifdef __cplusplus
 }

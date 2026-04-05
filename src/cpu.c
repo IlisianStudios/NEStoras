@@ -182,8 +182,14 @@ void cpu_step(CPU *cpu) {
         log_cpu_state(cpu, inst, pc_snapshot);  // pass snapshot
 
     #ifndef NDEBUG
-    if (cpu->nestest_comp && !nestest_compare(&nestest_log, cpu, &inst, pc_snapshot))
-        exit(1);
+    if (cpu->nestest_comp && !nestest_compare(&nestest_log, cpu, &inst, pc_snapshot)) {
+        cpu->nestest_comp = false;
+        if (feof(nestest_log.file))
+            printf("[NESTEST] ALL TESTS PASSED\n");
+        else
+            printf("[NESTEST] FAILED — stopped comparing, emulator still running\n");
+        nestest_close(&nestest_log);
+    }
     #endif
     uint8_t extra2 = inst.operate(cpu);
 

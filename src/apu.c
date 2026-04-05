@@ -221,7 +221,15 @@ float apu_mix(void) {
 }
 
 uint8_t apu_read(uint16_t addr) {
-    return 0;
+    (void)addr; // only $4015 is readable
+    uint8_t status = 0;
+    if (pulse1.length_counter > 0)   status |= 0x01;
+    if (pulse2.length_counter > 0)   status |= 0x02;
+    if (triangle.length_counter > 0) status |= 0x04;
+    if (noise.length_counter > 0)    status |= 0x08;
+    if (apu.frame_irq)               status |= 0x40;
+    apu.frame_irq = false;
+    return status;
 }
 
 void apu_write(uint16_t addr, uint8_t data) {
@@ -243,14 +251,15 @@ void apu_write(uint16_t addr, uint8_t data) {
             break;
         }
         case 0x4015:
-            // Enable/disable channels
-            apu.pulse1_enabled    = (data >> 0) & 1;
-            apu.pulse2_enabled    = (data >> 1) & 1;
-            apu.triangle_enabled  = (data >> 2) & 1;
-            apu.noise_enabled     = (data >> 3) & 1;
-            apu.dmc_enabled       = (data >> 4) & 1;
-            // Disabling a channel immediately zeros its length counter
-            // (add when you implement channels)
+            apu.pulse1_enabled   = (data >> 0) & 1;
+            apu.pulse2_enabled   = (data >> 1) & 1;
+            apu.triangle_enabled = (data >> 2) & 1;
+            apu.noise_enabled    = (data >> 3) & 1;
+            apu.dmc_enabled      = (data >> 4) & 1;
+            if (!apu.pulse1_enabled)   pulse1.length_counter   = 0;
+            if (!apu.pulse2_enabled)   pulse2.length_counter   = 0;
+            if (!apu.triangle_enabled) triangle.length_counter = 0;
+            if (!apu.noise_enabled)    noise.length_counter    = 0;
             break;
         case 0x4000:
             pulse1.duty = (data >> 6) & 0x03;

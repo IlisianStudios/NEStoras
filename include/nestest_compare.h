@@ -22,11 +22,13 @@ typedef struct {
     uint8_t p;
     uint8_t sp;
     uint32_t cyc;
+    uint16_t ppu_scanline;
+    uint16_t ppu_dot;
     char mnemonic[32];
 } NestestLine;
 
 static bool parse_nestest_line(const char *line, NestestLine *out) {
-    // C000  4C F5 C5  JMP $C5F5                       A:00 X:00 Y:00 P:24 SP:FD CYC:7
+    // C000  4C F5 C5  JMP $C5F5                       A:00 X:00 Y:00 P:24 SP:FD PPU:  0,  0 CYC:7
     if (!line || strlen(line) < 10) return false;
 
     unsigned int pc;
@@ -36,6 +38,8 @@ static bool parse_nestest_line(const char *line, NestestLine *out) {
     unsigned int p;
     unsigned int sp;
     unsigned int cyc;
+    unsigned int ppu_scanline;
+    unsigned int ppu_dot;
 
     if (sscanf(line, "%4X", &pc) != 1) return false;
     out->pc = (uint16_t)pc;
@@ -52,8 +56,8 @@ static bool parse_nestest_line(const char *line, NestestLine *out) {
     strncpy(out->mnemonic, mn_buf, sizeof(out->mnemonic) - 1);
     out->mnemonic[sizeof(out->mnemonic) - 1] = '\0';
 
-    if (sscanf(line + 48, "A:%2X X:%2X Y:%2X P:%2X SP:%2X PPU:%*[^C]CYC:%u",
-       &a, &x, &y, &p, &sp, &cyc)!= 6) return false;
+    if (sscanf(line + 48, "A:%2X X:%2X Y:%2X P:%2X SP:%2X PPU:%u,%u CYC:%u",
+       &a, &x, &y, &p, &sp, &ppu_scanline, &ppu_dot, &cyc) != 8) return false;
 
     out->a   = (uint8_t)a;
     out->x   = (uint8_t)x;
@@ -61,6 +65,8 @@ static bool parse_nestest_line(const char *line, NestestLine *out) {
     out->p   = (uint8_t)p;
     out->sp  = (uint8_t)sp;
     out->cyc = cyc;
+    out->ppu_scanline = (uint16_t)ppu_scanline;
+    out->ppu_dot = (uint16_t)ppu_dot;
 
     return true;
 }
@@ -103,6 +109,11 @@ static bool nestest_compare(NestestLog *log, const CPU *cpu, const Instruction *
 
     bool ok = true;
 
+    // Compute PPU dot/scanline from CPU total_cycles (3 PPU dots per CPU cycle, 341 dots per scanline)
+    uint32_t ppu_total = (uint32_t)(cpu->total_cycles * 3);
+    uint16_t emu_ppu_scanline = (ppu_total / 341) % 262;
+    uint16_t emu_ppu_dot = ppu_total % 341;
+
     #define CHECK(field, fmt, got, exp) \
         if ((got) != (exp)) { \
             printf("[NESTEST] line %u " field " mismatch: got " fmt " expected " fmt "\n", \
@@ -117,14 +128,18 @@ static bool nestest_compare(NestestLog *log, const CPU *cpu, const Instruction *
     CHECK("P",   "%02X", cpu->status, ref.p)
     CHECK("SP",  "%02X", cpu->sp,   ref.sp)
     CHECK("CYC", "%u",   (uint32_t)cpu->total_cycles, ref.cyc)
+    CHECK("PPU scanline", "%u", (uint32_t)emu_ppu_scanline, (uint32_t)ref.ppu_scanline)
+    CHECK("PPU dot", "%u", (uint32_t)emu_ppu_dot, (uint32_t)ref.ppu_dot)
 
     #undef CHECK
 
     if (!ok) {
         printf("[NESTEST] reference: %s\n", line);
-        printf("[NESTEST] yours:     %04X  %-31s A:%02X X:%02X Y:%02X P:%02X SP:%02X CYC:%llu\n",
+        printf("[NESTEST] yours:     %04X  %-31s A:%02X X:%02X Y:%02X P:%02X SP:%02X PPU:%3u,%3u CYC:%llu\n",
                pc, inst->name,
-               cpu->a, cpu->x, cpu->y, cpu->status, cpu->sp, (unsigned long long)cpu->total_cycles);
+               cpu->a, cpu->x, cpu->y, cpu->status, cpu->sp,
+               emu_ppu_scanline, emu_ppu_dot,
+               (unsigned long long)cpu->total_cycles);
         return false;
     }
 

@@ -1,4 +1,5 @@
 #pragma once
+#include <SDL_stdinc.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include "bus.h"
@@ -61,6 +62,8 @@ static inline uint8_t stack_pop(CPU *cpu){
     cpu->sp++;
     return bus_read(0x0100 | cpu->sp);
 }
+
+void audio_callback(void *userdata, Uint8 *stream, int len);
 
 
 #ifdef __cplusplus

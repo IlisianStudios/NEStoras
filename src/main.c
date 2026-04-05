@@ -28,6 +28,33 @@ void debug_nestest(void) {
     printf("Nestest cpu set proper\n");
 }
 
+void init_audio(void) {
+    SDL_AudioSpec want, have;
+    SDL_zero(want);
+
+    want.freq = 44100;          // 44.1 kHz
+    want.format = AUDIO_S16SYS; // Signed 16-bit, system byte order
+    want.channels = 1;          // Mono
+    want.samples = 4096;        // Buffer size (must be power of 2)
+    want.callback = audio_callback;
+    want.userdata = NULL;
+
+    SDL_AudioDeviceID dev = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0);
+
+    if (dev == 0) {
+        printf("Failed to open audio: %s\n", SDL_GetError());
+    } else {
+        // 5. Unpause to start audio
+        SDL_PauseAudioDevice(dev, 0);
+
+        // Keep the program alive to hear sound
+        SDL_Delay(5000);
+
+        SDL_CloseAudioDevice(dev);
+    }
+
+}
+
 void init(void) {
     init_lookup();
     cartridge = NULL;
@@ -38,6 +65,7 @@ void init(void) {
     }
 
     SDL_EventState(SDL_DROPFILE, SDL_ENABLE);
+    init_audio();
 }
 
 SDL_Window* setup_window(void) {

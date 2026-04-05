@@ -6,7 +6,6 @@
 
 NestestLog nestest_log = {0};
 
-
 void log_cpu_state(const CPU *cpu, Instruction inst, uint16_t pc) {
     // Print PC
     printf("%04X  ", pc);
@@ -97,7 +96,6 @@ void cpu_reset(CPU *cpu){
     cpu->testing_mode = false;
 }
 
-
 // non-maskable interrupt
 void cpu_nmi(CPU *cpu){
     // pushes pc to stack
@@ -130,6 +128,16 @@ void cpu_irq(CPU *cpu){
     uint8_t lo = bus_read(0xFFFE);
     uint8_t hi = bus_read(0xFFFF);
     cpu->pc = (hi << 8) | lo;
+}
+
+void audio_callback(void *userdata, Uint8 *stream, int len) {
+    // SDL2 requires you to initialize the buffer.
+    // Fill with 0 (silence) if no data is ready.
+    SDL_memset(stream, 0, len);
+
+    // Cast stream to (Sint16*) to handle signed 16-bit data
+    Sint16 *buffer = (Sint16 *)stream;
+    int samplesCount = len / sizeof(Sint16);
 }
 
 void fetch(CPU *cpu) {

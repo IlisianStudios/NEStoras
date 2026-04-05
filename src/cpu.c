@@ -64,13 +64,19 @@ void log_cpu_state(const CPU *cpu, Instruction inst, uint16_t pc) {
 
     printf("%-31s", operand);
 
+    // Replace with Ppu numbers. they get properly computed here and the whole nettestlog agrres with it
+    uint32_t ppu_total = (uint32_t)(cpu->total_cycles * 3);
+    uint16_t ppu_scanline = (ppu_total / 341) % 262;
+    uint16_t ppu_dot = ppu_total % 341;
+
     // Print CPU registers
-    printf("A:%02X X:%02X Y:%02X P:%02X SP:%02X CYC:%llu\tNO PPU CYCLES, THEY ARE SKIPPED\n",
+    printf("A:%02X X:%02X Y:%02X P:%02X SP:%02X PPU:%3u,%3u CYC:%llu\n",
            cpu->a,
            cpu->x,
            cpu->y,
            cpu->status,
            cpu->sp,
+           ppu_scanline, ppu_dot,
            (unsigned long long)cpu->total_cycles);
 }
 
@@ -98,7 +104,7 @@ void cpu_nmi(CPU *cpu){
     stack_push(cpu, (cpu->pc >> 8) & 0xFF); // high byte
     stack_push(cpu, (cpu->pc & 0xFF)); // low byte
     // pushes flags to stack, forces U=1 (always 1 but forces it anyway), B=0 ONLY IN STACK
-    // technically unneeded to force but 6502 does that so whatever 
+    // technically unneeded to force but 6502 does that so whatever
     stack_push(cpu, (cpu->status | FLAG_U) & ~FLAG_B);
 
     set_flag(cpu,FLAG_I,1); // disables further interrupts (since already in interrupt handling)

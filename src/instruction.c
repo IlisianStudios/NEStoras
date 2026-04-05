@@ -122,56 +122,62 @@ uint8_t op_PLP(CPU *cpu) {
     return 0;
 }
 
-uint8_t op_ADC(CPU *cpu) {
-    uint16_t const sum = cpu->a + cpu->addr_abs + get_flag(cpu, FLAG_C);
+static inline uint8_t adc_impl(CPU *cpu, uint8_t value) {
+    const uint16_t sum = cpu->a + value + get_flag(cpu, FLAG_C);
 
-    set_flag(cpu, FLAG_C, sum & 0xFF);
-    set_flag(cpu, FLAG_V, (~(cpu->a ^ cpu->addr_abs) & (cpu->a ^ sum)) & 0x80);
+    set_flag(cpu, FLAG_C, sum > 0xFF);
+    set_flag(cpu, FLAG_V, (~(cpu->a ^ value) & (cpu->a ^ sum)) & 0x80);
     cpu->a = sum & 0xFF;
     update_nz(cpu, cpu->a);
     return 1;
 }
 
+uint8_t op_ADC(CPU *cpu) {
+    return adc_impl(cpu, bus_read(cpu->addr_abs));
+}
+
 uint8_t op_SBC(CPU *cpu) {
-    cpu->addr_abs = ~cpu->addr_abs;
-    return op_ADC(cpu);
+    return adc_impl(cpu, ~bus_read(cpu->addr_abs));
 }
 
 uint8_t op_AND(CPU *cpu) {
-    cpu->a &= cpu->addr_abs;
+    cpu->a &= bus_read(cpu->addr_abs);
     update_nz(cpu, cpu->a);
     return 1;
 }
 
 uint8_t op_ORA(CPU *cpu) {
-    cpu->a |= cpu->addr_abs;
+    cpu->a |= bus_read(cpu->addr_abs);
     update_nz(cpu, cpu->a);
     return 1;
 }
 
 uint8_t op_CMP(CPU *cpu) {
-    const uint8_t result = cpu->a - cpu->addr_abs;
-    set_flag(cpu, FLAG_C, result & 0xFF);
-    update_nz(cpu, cpu->a);
+    const uint8_t value = bus_read(cpu->addr_abs);
+    const uint8_t result = cpu->a - value;
+    set_flag(cpu, FLAG_C, cpu->a >= value);
+    update_nz(cpu, result);
     return 1;
 }
 
 uint8_t op_CPX(CPU *cpu) {
-    const uint8_t result = cpu->x - cpu->addr_abs;
-    set_flag(cpu, FLAG_C, result & 0xFF);
-    update_nz(cpu, cpu->x);
+    const uint8_t value = bus_read(cpu->addr_abs);
+    const uint8_t result = cpu->x - value;
+    set_flag(cpu, FLAG_C, cpu->x >= value);
+    update_nz(cpu, result);
     return 0;
 }
 
 uint8_t op_CPY(CPU *cpu) {
-    const uint8_t result = cpu->y- cpu->addr_abs;
-    set_flag(cpu, FLAG_C, result & 0xFF);
-    update_nz(cpu, cpu->y);
+    const uint8_t value = bus_read(cpu->addr_abs);
+    const uint8_t result = cpu->y - value;
+    set_flag(cpu, FLAG_C, cpu->y >= value);
+    update_nz(cpu, result);
     return 0;
 }
 
 uint8_t op_EOR(CPU *cpu) {
-    cpu->a ^= cpu->addr_abs;
+    cpu->a ^= bus_read(cpu->addr_abs);
     update_nz(cpu, cpu->a);
     return 1;
 }
@@ -210,10 +216,10 @@ uint8_t op_BVS(CPU *cpu) {
 
 uint8_t op_ASL(CPU *cpu) {
 
-    const bool cond = lookup[cpu->fetched].addrmode == addr_ACC;
+    const bool cond = lookup[cpu->fetched].addrmode == &addr_ACC;
     uint16_t temp = sr_helper_read(cpu, cond);
 
-    set_flag(cpu, FLAG_C, temp & 0xFF00);
+    set_flag(cpu, FLAG_C, temp & 0x80);
     temp = temp << 1;
     update_nz(cpu, temp & 0xFF);
 
@@ -222,7 +228,7 @@ uint8_t op_ASL(CPU *cpu) {
 }
 
 uint8_t op_LSR(CPU *cpu) {
-    const bool cond = lookup[cpu->fetched].addrmode == addr_ACC;
+    const bool cond = lookup[cpu->fetched].addrmode == &addr_ACC;
     uint16_t temp = sr_helper_read(cpu, cond);
 
     set_flag(cpu, FLAG_C, temp & 0x01);
@@ -234,7 +240,7 @@ uint8_t op_LSR(CPU *cpu) {
 }
 
 uint8_t op_ROL(CPU *cpu) {
-    const bool cond = lookup[cpu->fetched].addrmode == addr_ACC;
+    const bool cond = lookup[cpu->fetched].addrmode == &addr_ACC;
     uint16_t temp = sr_helper_read(cpu, cond);
 
     uint8_t const old_c = get_flag(cpu, FLAG_C);
@@ -248,7 +254,7 @@ uint8_t op_ROL(CPU *cpu) {
 }
 
 uint8_t op_ROR(CPU *cpu) {
-    const bool cond = lookup[cpu->fetched].addrmode == addr_ACC;
+    const bool cond = lookup[cpu->fetched].addrmode == &addr_ACC;
     uint16_t temp = sr_helper_read(cpu, cond);
 
     uint8_t old_c = get_flag(cpu, FLAG_C);
@@ -289,6 +295,9 @@ uint8_t op_RTS(CPU *cpu) {
 uint8_t op_RTI(CPU *cpu) {
     cpu->status = stack_pop(cpu);
 
+    set_flag(cpu, FLAG_U, true);
+    set_flag(cpu, FLAG_B, false);
+
     const uint16_t lo = stack_pop(cpu);
     const uint16_t hi = stack_pop(cpu);
 
@@ -314,7 +323,7 @@ uint8_t op_BRK(CPU *cpu) {
 }
 
 uint8_t op_INC(CPU *cpu) {
-    const bool cond = lookup[cpu->fetched].addrmode == addr_ACC;
+    const bool cond = lookup[cpu->fetched].addrmode == &addr_ACC;
     const uint16_t v = sr_helper_read(cpu, cond) + 1;
     sr_helper_write(cpu, cond, v);
     update_nz(cpu, v);
@@ -335,7 +344,7 @@ uint8_t op_INX(CPU *cpu) {
 }
 
 uint8_t op_DEC(CPU *cpu) {
-    const bool cond = lookup[cpu->fetched].addrmode == addr_ACC;
+    const bool cond = lookup[cpu->fetched].addrmode == &addr_ACC;
     const uint16_t v = sr_helper_read(cpu, cond) - 1;
     sr_helper_write(cpu, cond, v);
     update_nz(cpu, v);
@@ -405,16 +414,119 @@ uint8_t op_BIT(CPU *cpu) {
 // Note: cpu could be const here, but signature must match operatemode_f typedef
 uint8_t op_NOOP(CPU *cpu) {
     (void)cpu;
+    return 1;
+}
+
+uint8_t op_LAX(CPU *cpu) {
+    cpu->a = bus_read(cpu->addr_abs);
+    cpu->x = cpu->a;
+    update_nz(cpu, cpu->x);
+
+    return 1;
+}
+
+uint8_t op_SAX(CPU *cpu) {
+    bus_write(cpu->addr_abs, cpu->a & cpu->x);
+    return 0;
+}
+
+uint8_t op_DCP(CPU *cpu) {
+    uint8_t const value = bus_read(cpu->addr_abs) -1;
+    bus_write(cpu->addr_abs, value);
+    uint8_t const result = cpu->a - value;
+    set_flag(cpu, FLAG_C, cpu->a >= value);
+    update_nz(cpu, result);
+    return 0;
+}
+
+uint8_t op_ISC(CPU *cpu) {
+    uint8_t const value = bus_read(cpu->addr_abs) + 1;
+    bus_write(cpu->addr_abs, value);
+    adc_impl(cpu, ~value);
+    return 0;
+}
+
+uint8_t op_SLO(CPU *cpu) {
+    uint8_t value = bus_read(cpu->addr_abs);
+    set_flag(cpu, FLAG_C, value & 0x80);
+    value <<= 1;
+    bus_write(cpu->addr_abs, value);
+    cpu->a |= value;
+    update_nz(cpu, cpu->a);
+    return 0;
+}
+
+uint8_t op_RLA(CPU *cpu) {
+    uint8_t val = bus_read(cpu->addr_abs);
+    uint8_t old_c = get_flag(cpu, FLAG_C);
+    set_flag(cpu, FLAG_C, val & 0x80);
+    val = (val << 1) | old_c;
+    bus_write(cpu->addr_abs, val);
+    cpu->a &= val;
+    update_nz(cpu, cpu->a);
+    return 0;
+}
+
+uint8_t op_SRE(CPU *cpu) {
+    uint8_t val = bus_read(cpu->addr_abs);
+    set_flag(cpu, FLAG_C, val & 0x01);
+    val >>= 1;
+    bus_write(cpu->addr_abs, val);
+    cpu->a ^= val;
+    update_nz(cpu, cpu->a);
+    return 0;
+}
+
+uint8_t op_RRA(CPU *cpu) {
+    uint8_t val = bus_read(cpu->addr_abs);
+    uint8_t old_c = get_flag(cpu, FLAG_C);
+    set_flag(cpu, FLAG_C, val & 0x01);
+    val = (val >> 1) | (old_c << 7);
+    bus_write(cpu->addr_abs, val);
+    adc_impl(cpu, val);
+    return 0;
+}
+
+uint8_t op_ANC(CPU *cpu) {
+    cpu->a &= bus_read(cpu->addr_abs);
+    update_nz(cpu, cpu->a);
+    set_flag(cpu, FLAG_C, cpu->a & 0x80);
+    return 0;
+}
+
+uint8_t op_ALR(CPU *cpu) {
+    cpu->a &= bus_read(cpu->addr_abs);
+    set_flag(cpu, FLAG_C, cpu->a & 0x01);
+    cpu->a >>= 1;
+    update_nz(cpu, cpu->a);
+    return 0;
+}
+
+uint8_t op_ARR(CPU *cpu) {
+    cpu->a &= bus_read(cpu->addr_abs);
+    cpu->a = (cpu->a >> 1) | (get_flag(cpu, FLAG_C) << 7);
+    update_nz(cpu, cpu->a);
+    set_flag(cpu, FLAG_C, cpu->a & 0x40);
+    set_flag(cpu, FLAG_V, ((cpu->a >> 6) ^ (cpu->a >> 5)) & 1);
+    return 0;
+}
+
+uint8_t op_AXS(CPU *cpu) {
+    uint8_t val = bus_read(cpu->addr_abs);
+    uint8_t ax = cpu->a & cpu->x;
+    cpu->x = ax - val;
+    set_flag(cpu, FLAG_C, ax >= val);
+    update_nz(cpu, cpu->x);
     return 0;
 }
 
 uint8_t addr_IMP(CPU *cpu) {
-    cpu->fetched = cpu->a;
+    (void)cpu;
     return 0;
 }
 
 uint8_t addr_ACC(CPU *cpu) {
-    cpu->fetched = cpu->a;
+    (void)cpu;
     return 0;
 }
 
@@ -479,7 +591,7 @@ uint8_t addr_IDX(CPU *cpu) {
     const uint8_t addr = bus_read(advance_pc(cpu));
     const uint8_t ptr = (addr + cpu->x) & 0xFF;
     const uint8_t lo = bus_read(ptr);
-    const uint8_t hi = bus_read(ptr+1) & 0xFF;
+    const uint8_t hi = bus_read((ptr+1) & 0xFF);
     cpu->addr_abs = (hi << 8) | lo;
 
     return 0;
@@ -562,7 +674,7 @@ void init_lookup(void) {
     lookup[0x8E] = (Instruction){ "STX", op_STX, addr_ABS, 3, 4 };
     // STY
     lookup[0x84] = (Instruction){ "STY", op_STY, addr_ZPO, 2, 3 };
-    lookup[0x94] = (Instruction){ "STY", op_STY, addr_ZPY, 2, 4 };
+    lookup[0x94] = (Instruction){ "STY", op_STY, addr_ZPX, 2, 4 };
     lookup[0x8C] = (Instruction){ "STY", op_STY, addr_ABS, 3, 4 };
     // TAX
     lookup[0xAA] = (Instruction){ "TAX", op_TAX, addr_IMP, 1, 2 };
@@ -585,7 +697,6 @@ void init_lookup(void) {
     // PLP
     lookup[0x28] = (Instruction){ "PLP", op_PLP, addr_IMP, 1, 4 };
     // ALU
-    lookup[0x72] = (Instruction){ "ADC", op_ADC, addr_ZPO, 2, 5 };
     lookup[0x69] = (Instruction){ "ADC", op_ADC, addr_IMM, 2, 2 };
     lookup[0x65] = (Instruction){ "ADC", op_ADC, addr_ZPO, 2, 3 };
     lookup[0x75] = (Instruction){ "ADC", op_ADC, addr_ZPX, 2, 4 };
@@ -603,7 +714,6 @@ void init_lookup(void) {
     lookup[0xF9] = (Instruction){ "SBC", op_SBC, addr_ABY, 3, 4 };
     lookup[0xE1] = (Instruction){ "SBC", op_SBC, addr_IDX, 2, 6 };
     lookup[0xF1] = (Instruction){ "SBC", op_SBC, addr_IZY, 2, 5 };
-    lookup[0xF2] = (Instruction){ "SBC", op_SBC, addr_ZPO, 2, 5 };
 
     lookup[0x29] = (Instruction){ "AND", op_AND, addr_IMM, 2, 2 };
     lookup[0x25] = (Instruction){ "AND", op_AND, addr_ZPO, 2, 3 };
@@ -632,7 +742,6 @@ void init_lookup(void) {
     lookup[0x41] = (Instruction){ "EOR", op_EOR, addr_IDX, 2, 6 };
     lookup[0x51] = (Instruction){ "EOR", op_EOR, addr_IZY, 2, 5 };
 
-    lookup[0xD2] = (Instruction){ "CMP", op_CMP, addr_ZPO, 2, 5 };
     lookup[0xC9] = (Instruction){ "CMP", op_CMP, addr_IMM, 2, 2 };
     lookup[0xC5] = (Instruction){ "CMP", op_CMP, addr_ZPO, 2, 3 };
     lookup[0xD5] = (Instruction){ "CMP", op_CMP, addr_ZPX, 2, 4 };
@@ -691,7 +800,6 @@ void init_lookup(void) {
     lookup[0x40] = (Instruction){ "RTI", op_RTI, addr_IMP, 1, 6 };
     lookup[0x00] = (Instruction){ "BRK", op_BRK, addr_IMP, 1, 7 };
 
-    lookup[0x1A] = (Instruction){ "INC", op_INC, addr_ACC, 1, 2 };
     lookup[0xE6] = (Instruction){ "INC", op_INC, addr_ZPO, 2, 5 };
     lookup[0xF6] = (Instruction){ "INC", op_INC, addr_ZPX, 2, 6 };
     lookup[0xEE] = (Instruction){ "INC", op_INC, addr_ABS, 3, 6 };
@@ -699,7 +807,6 @@ void init_lookup(void) {
     lookup[0xE8] = (Instruction){ "INX", op_INX, addr_IMP, 1, 2 };
     lookup[0xC8] = (Instruction){ "INY", op_INY, addr_IMP, 1, 2 };
 
-    lookup[0x3A] = (Instruction){ "DEC", op_DEC, addr_ACC, 1, 2 };
     lookup[0xC6] = (Instruction){ "DEC", op_DEC, addr_ZPO, 2, 5 };
     lookup[0xD6] = (Instruction){ "DEC", op_DEC, addr_ZPX, 2, 6 };
     lookup[0xCE] = (Instruction){ "DEC", op_DEC, addr_ABS, 3, 6 };
@@ -715,17 +822,124 @@ void init_lookup(void) {
     lookup[0xD8] = (Instruction){ "CLD", op_CLD, addr_IMP, 1, 2 };
     lookup[0xF8] = (Instruction){ "SED", op_SED, addr_IMP, 1, 2 };
 
-    lookup[0x89] = (Instruction){ "BIT", op_BIT, addr_IMM, 2, 2 };
+    // BIT (official NMOS 6502 variants only)
     lookup[0x24] = (Instruction){ "BIT", op_BIT, addr_ZPO, 2, 3 };
-    lookup[0x34] = (Instruction){ "BIT", op_BIT, addr_ZPX, 2, 4 };
     lookup[0x2C] = (Instruction){ "BIT", op_BIT, addr_ABS, 3, 4 };
-    lookup[0x3C] = (Instruction){ "BIT", op_BIT, addr_ABX, 3, 4 };
 
+    // Unofficial NOPs (65C02 BIT opcodes → NOP on NMOS 6502, must skip operand bytes)
+    lookup[0x89] = (Instruction){ "*NOP", op_NOOP, addr_IMM, 2, 2 };
+    lookup[0x34] = (Instruction){ "*NOP", op_NOOP, addr_ZPX, 2, 4 };
+    lookup[0x3C] = (Instruction){ "*NOP", op_NOOP, addr_ABX, 3, 4 };
 
+    lookup[0x1A] = (Instruction){ "*NOP", op_NOOP, addr_IMP, 1, 2 };
+    lookup[0x3A] = (Instruction){ "*NOP", op_NOOP, addr_IMP, 1, 2 };
+    lookup[0x5A] = (Instruction){ "*NOP", op_NOOP, addr_IMP, 1, 2 };
+    lookup[0x7A] = (Instruction){ "*NOP", op_NOOP, addr_IMP, 1, 2 };
+    lookup[0xDA] = (Instruction){ "*NOP", op_NOOP, addr_IMP, 1, 2 };
+    lookup[0xFA] = (Instruction){ "*NOP", op_NOOP, addr_IMP, 1, 2 };
 
+    lookup[0x04] = (Instruction){ "*NOP", op_NOOP, addr_ZPO, 2, 3 };
+    lookup[0x14] = (Instruction){ "*NOP", op_NOOP, addr_ZPX, 2, 4 };
+    lookup[0x44] = (Instruction){ "*NOP", op_NOOP, addr_ZPO, 2, 3 };
+    lookup[0x54] = (Instruction){ "*NOP", op_NOOP, addr_ZPX, 2, 4 };
+    lookup[0x64] = (Instruction){ "*NOP", op_NOOP, addr_ZPO, 2, 3 };
+    lookup[0x74] = (Instruction){ "*NOP", op_NOOP, addr_ZPX, 2, 4 };
+    lookup[0x80] = (Instruction){ "*NOP", op_NOOP, addr_IMM, 2, 2 };
+    lookup[0x82] = (Instruction){ "*NOP", op_NOOP, addr_IMM, 2, 2 };
+    lookup[0xC2] = (Instruction){ "*NOP", op_NOOP, addr_IMM, 2, 2 };
+    lookup[0xD4] = (Instruction){ "*NOP", op_NOOP, addr_ZPX, 2, 4 };
+    lookup[0xE2] = (Instruction){ "*NOP", op_NOOP, addr_IMM, 2, 2 };
+    lookup[0xF4] = (Instruction){ "*NOP", op_NOOP, addr_ZPX, 2, 4 };
 
+    lookup[0x0C] = (Instruction){ "*NOP", op_NOOP, addr_ABS, 3, 4 };
+    lookup[0x1C] = (Instruction){ "*NOP", op_NOOP, addr_ABX, 3, 4 };
+    lookup[0x5C] = (Instruction){ "*NOP", op_NOOP, addr_ABX, 3, 4 };
+    lookup[0x7C] = (Instruction){ "*NOP", op_NOOP, addr_ABX, 3, 4 };
+    lookup[0xDC] = (Instruction){ "*NOP", op_NOOP, addr_ABX, 3, 4 };
+    lookup[0xFC] = (Instruction){ "*NOP", op_NOOP, addr_ABX, 3, 4 };
 
+    lookup[0xEB] = (Instruction){ "*SBC", op_SBC, addr_IMM, 2, 2 };
 
+    // LAX: Load A and X
+    lookup[0xA3] = (Instruction){ "*LAX", op_LAX, addr_IDX, 2, 6 };
+    lookup[0xA7] = (Instruction){ "*LAX", op_LAX, addr_ZPO, 2, 3 };
+    lookup[0xAF] = (Instruction){ "*LAX", op_LAX, addr_ABS, 3, 4 };
+    lookup[0xB3] = (Instruction){ "*LAX", op_LAX, addr_IZY, 2, 5 };
+    lookup[0xB7] = (Instruction){ "*LAX", op_LAX, addr_ZPY, 2, 4 };
+    lookup[0xBF] = (Instruction){ "*LAX", op_LAX, addr_ABY, 3, 4 };
+
+    // SAX: Store A AND X
+    lookup[0x83] = (Instruction){ "*SAX", op_SAX, addr_IDX, 2, 6 };
+    lookup[0x87] = (Instruction){ "*SAX", op_SAX, addr_ZPO, 2, 3 };
+    lookup[0x8F] = (Instruction){ "*SAX", op_SAX, addr_ABS, 3, 4 };
+    lookup[0x97] = (Instruction){ "*SAX", op_SAX, addr_ZPY, 2, 4 };
+
+    // DCP: Decrement then Compare
+    lookup[0xC3] = (Instruction){ "*DCP", op_DCP, addr_IDX, 2, 8 };
+    lookup[0xC7] = (Instruction){ "*DCP", op_DCP, addr_ZPO, 2, 5 };
+    lookup[0xCF] = (Instruction){ "*DCP", op_DCP, addr_ABS, 3, 6 };
+    lookup[0xD3] = (Instruction){ "*DCP", op_DCP, addr_IZY, 2, 8 };
+    lookup[0xD7] = (Instruction){ "*DCP", op_DCP, addr_ZPX, 2, 6 };
+    lookup[0xDB] = (Instruction){ "*DCP", op_DCP, addr_ABY, 3, 7 };
+    lookup[0xDF] = (Instruction){ "*DCP", op_DCP, addr_ABX, 3, 7 };
+
+    // ISC (ISB): Increment then Subtract
+    lookup[0xE3] = (Instruction){ "*ISB", op_ISC, addr_IDX, 2, 8 };
+    lookup[0xE7] = (Instruction){ "*ISB", op_ISC, addr_ZPO, 2, 5 };
+    lookup[0xEF] = (Instruction){ "*ISB", op_ISC, addr_ABS, 3, 6 };
+    lookup[0xF3] = (Instruction){ "*ISB", op_ISC, addr_IZY, 2, 8 };
+    lookup[0xF7] = (Instruction){ "*ISB", op_ISC, addr_ZPX, 2, 6 };
+    lookup[0xFB] = (Instruction){ "*ISB", op_ISC, addr_ABY, 3, 7 };
+    lookup[0xFF] = (Instruction){ "*ISB", op_ISC, addr_ABX, 3, 7 };
+
+    // SLO: ASL then ORA
+    lookup[0x03] = (Instruction){ "*SLO", op_SLO, addr_IDX, 2, 8 };
+    lookup[0x07] = (Instruction){ "*SLO", op_SLO, addr_ZPO, 2, 5 };
+    lookup[0x0F] = (Instruction){ "*SLO", op_SLO, addr_ABS, 3, 6 };
+    lookup[0x13] = (Instruction){ "*SLO", op_SLO, addr_IZY, 2, 8 };
+    lookup[0x17] = (Instruction){ "*SLO", op_SLO, addr_ZPX, 2, 6 };
+    lookup[0x1B] = (Instruction){ "*SLO", op_SLO, addr_ABY, 3, 7 };
+    lookup[0x1F] = (Instruction){ "*SLO", op_SLO, addr_ABX, 3, 7 };
+
+    // RLA: ROL then AND
+    lookup[0x23] = (Instruction){ "*RLA", op_RLA, addr_IDX, 2, 8 };
+    lookup[0x27] = (Instruction){ "*RLA", op_RLA, addr_ZPO, 2, 5 };
+    lookup[0x2F] = (Instruction){ "*RLA", op_RLA, addr_ABS, 3, 6 };
+    lookup[0x33] = (Instruction){ "*RLA", op_RLA, addr_IZY, 2, 8 };
+    lookup[0x37] = (Instruction){ "*RLA", op_RLA, addr_ZPX, 2, 6 };
+    lookup[0x3B] = (Instruction){ "*RLA", op_RLA, addr_ABY, 3, 7 };
+    lookup[0x3F] = (Instruction){ "*RLA", op_RLA, addr_ABX, 3, 7 };
+
+    // SRE: LSR then EOR
+    lookup[0x43] = (Instruction){ "*SRE", op_SRE, addr_IDX, 2, 8 };
+    lookup[0x47] = (Instruction){ "*SRE", op_SRE, addr_ZPO, 2, 5 };
+    lookup[0x4F] = (Instruction){ "*SRE", op_SRE, addr_ABS, 3, 6 };
+    lookup[0x53] = (Instruction){ "*SRE", op_SRE, addr_IZY, 2, 8 };
+    lookup[0x57] = (Instruction){ "*SRE", op_SRE, addr_ZPX, 2, 6 };
+    lookup[0x5B] = (Instruction){ "*SRE", op_SRE, addr_ABY, 3, 7 };
+    lookup[0x5F] = (Instruction){ "*SRE", op_SRE, addr_ABX, 3, 7 };
+
+    // RRA: ROR then ADC
+    lookup[0x63] = (Instruction){ "*RRA", op_RRA, addr_IDX, 2, 8 };
+    lookup[0x67] = (Instruction){ "*RRA", op_RRA, addr_ZPO, 2, 5 };
+    lookup[0x6F] = (Instruction){ "*RRA", op_RRA, addr_ABS, 3, 6 };
+    lookup[0x73] = (Instruction){ "*RRA", op_RRA, addr_IZY, 2, 8 };
+    lookup[0x77] = (Instruction){ "*RRA", op_RRA, addr_ZPX, 2, 6 };
+    lookup[0x7B] = (Instruction){ "*RRA", op_RRA, addr_ABY, 3, 7 };
+    lookup[0x7F] = (Instruction){ "*RRA", op_RRA, addr_ABX, 3, 7 };
+
+    // ANC: AND #imm, copy N to C
+    lookup[0x0B] = (Instruction){ "*ANC", op_ANC, addr_IMM, 2, 2 };
+    lookup[0x2B] = (Instruction){ "*ANC", op_ANC, addr_IMM, 2, 2 };
+
+    // ALR: AND #imm then LSR A
+    lookup[0x4B] = (Instruction){ "*ALR", op_ALR, addr_IMM, 2, 2 };
+
+    // ARR: AND #imm then ROR A (special flags)
+    lookup[0x6B] = (Instruction){ "*ARR", op_ARR, addr_IMM, 2, 2 };
+
+    // AXS (SBX): X = (A & X) - #imm
+    lookup[0xCB] = (Instruction){ "*AXS", op_AXS, addr_IMM, 2, 2 };
 }
 
 

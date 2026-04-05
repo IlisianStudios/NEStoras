@@ -219,7 +219,7 @@ uint8_t op_ASL(CPU *cpu) {
     const bool cond = lookup[cpu->fetched].addrmode == &addr_ACC;
     uint16_t temp = sr_helper_read(cpu, cond);
 
-    set_flag(cpu, FLAG_C, temp & 0xFF00);
+    set_flag(cpu, FLAG_C, temp & 0x80);
     temp = temp << 1;
     update_nz(cpu, temp & 0xFF);
 
@@ -294,6 +294,9 @@ uint8_t op_RTS(CPU *cpu) {
 
 uint8_t op_RTI(CPU *cpu) {
     cpu->status = stack_pop(cpu);
+
+    set_flag(cpu, FLAG_U, true);
+    set_flag(cpu, FLAG_B, false);
 
     const uint16_t lo = stack_pop(cpu);
     const uint16_t hi = stack_pop(cpu);
@@ -411,16 +414,16 @@ uint8_t op_BIT(CPU *cpu) {
 // Note: cpu could be const here, but signature must match operatemode_f typedef
 uint8_t op_NOOP(CPU *cpu) {
     (void)cpu;
-    return 0;
+    return 1;
 }
 
 uint8_t addr_IMP(CPU *cpu) {
-    cpu->fetched = cpu->a;
+    (void)cpu;
     return 0;
 }
 
 uint8_t addr_ACC(CPU *cpu) {
-    cpu->fetched = cpu->a;
+    (void)cpu;
     return 0;
 }
 
@@ -485,7 +488,7 @@ uint8_t addr_IDX(CPU *cpu) {
     const uint8_t addr = bus_read(advance_pc(cpu));
     const uint8_t ptr = (addr + cpu->x) & 0xFF;
     const uint8_t lo = bus_read(ptr);
-    const uint8_t hi = bus_read(ptr+1) & 0xFF;
+    const uint8_t hi = bus_read((ptr+1) & 0xFF);
     cpu->addr_abs = (hi << 8) | lo;
 
     return 0;
@@ -568,7 +571,7 @@ void init_lookup(void) {
     lookup[0x8E] = (Instruction){ "STX", op_STX, addr_ABS, 3, 4 };
     // STY
     lookup[0x84] = (Instruction){ "STY", op_STY, addr_ZPO, 2, 3 };
-    lookup[0x94] = (Instruction){ "STY", op_STY, addr_ZPY, 2, 4 };
+    lookup[0x94] = (Instruction){ "STY", op_STY, addr_ZPX, 2, 4 };
     lookup[0x8C] = (Instruction){ "STY", op_STY, addr_ABS, 3, 4 };
     // TAX
     lookup[0xAA] = (Instruction){ "TAX", op_TAX, addr_IMP, 1, 2 };
@@ -591,7 +594,6 @@ void init_lookup(void) {
     // PLP
     lookup[0x28] = (Instruction){ "PLP", op_PLP, addr_IMP, 1, 4 };
     // ALU
-    lookup[0x72] = (Instruction){ "ADC", op_ADC, addr_ZPO, 2, 5 };
     lookup[0x69] = (Instruction){ "ADC", op_ADC, addr_IMM, 2, 2 };
     lookup[0x65] = (Instruction){ "ADC", op_ADC, addr_ZPO, 2, 3 };
     lookup[0x75] = (Instruction){ "ADC", op_ADC, addr_ZPX, 2, 4 };
@@ -609,7 +611,6 @@ void init_lookup(void) {
     lookup[0xF9] = (Instruction){ "SBC", op_SBC, addr_ABY, 3, 4 };
     lookup[0xE1] = (Instruction){ "SBC", op_SBC, addr_IDX, 2, 6 };
     lookup[0xF1] = (Instruction){ "SBC", op_SBC, addr_IZY, 2, 5 };
-    lookup[0xF2] = (Instruction){ "SBC", op_SBC, addr_ZPO, 2, 5 };
 
     lookup[0x29] = (Instruction){ "AND", op_AND, addr_IMM, 2, 2 };
     lookup[0x25] = (Instruction){ "AND", op_AND, addr_ZPO, 2, 3 };
@@ -638,7 +639,6 @@ void init_lookup(void) {
     lookup[0x41] = (Instruction){ "EOR", op_EOR, addr_IDX, 2, 6 };
     lookup[0x51] = (Instruction){ "EOR", op_EOR, addr_IZY, 2, 5 };
 
-    lookup[0xD2] = (Instruction){ "CMP", op_CMP, addr_ZPO, 2, 5 };
     lookup[0xC9] = (Instruction){ "CMP", op_CMP, addr_IMM, 2, 2 };
     lookup[0xC5] = (Instruction){ "CMP", op_CMP, addr_ZPO, 2, 3 };
     lookup[0xD5] = (Instruction){ "CMP", op_CMP, addr_ZPX, 2, 4 };
@@ -697,7 +697,6 @@ void init_lookup(void) {
     lookup[0x40] = (Instruction){ "RTI", op_RTI, addr_IMP, 1, 6 };
     lookup[0x00] = (Instruction){ "BRK", op_BRK, addr_IMP, 1, 7 };
 
-    lookup[0x1A] = (Instruction){ "INC", op_INC, addr_ACC, 1, 2 };
     lookup[0xE6] = (Instruction){ "INC", op_INC, addr_ZPO, 2, 5 };
     lookup[0xF6] = (Instruction){ "INC", op_INC, addr_ZPX, 2, 6 };
     lookup[0xEE] = (Instruction){ "INC", op_INC, addr_ABS, 3, 6 };
@@ -705,7 +704,6 @@ void init_lookup(void) {
     lookup[0xE8] = (Instruction){ "INX", op_INX, addr_IMP, 1, 2 };
     lookup[0xC8] = (Instruction){ "INY", op_INY, addr_IMP, 1, 2 };
 
-    lookup[0x3A] = (Instruction){ "DEC", op_DEC, addr_ACC, 1, 2 };
     lookup[0xC6] = (Instruction){ "DEC", op_DEC, addr_ZPO, 2, 5 };
     lookup[0xD6] = (Instruction){ "DEC", op_DEC, addr_ZPX, 2, 6 };
     lookup[0xCE] = (Instruction){ "DEC", op_DEC, addr_ABS, 3, 6 };
@@ -721,11 +719,44 @@ void init_lookup(void) {
     lookup[0xD8] = (Instruction){ "CLD", op_CLD, addr_IMP, 1, 2 };
     lookup[0xF8] = (Instruction){ "SED", op_SED, addr_IMP, 1, 2 };
 
-    lookup[0x89] = (Instruction){ "BIT", op_BIT, addr_IMM, 2, 2 };
+    // BIT (official NMOS 6502 variants only)
     lookup[0x24] = (Instruction){ "BIT", op_BIT, addr_ZPO, 2, 3 };
-    lookup[0x34] = (Instruction){ "BIT", op_BIT, addr_ZPX, 2, 4 };
     lookup[0x2C] = (Instruction){ "BIT", op_BIT, addr_ABS, 3, 4 };
-    lookup[0x3C] = (Instruction){ "BIT", op_BIT, addr_ABX, 3, 4 };
+
+    // Unofficial NOPs (65C02 BIT opcodes → NOP on NMOS 6502, must skip operand bytes)
+    lookup[0x89] = (Instruction){ "*NOP", op_NOOP, addr_IMM, 2, 2 };
+    lookup[0x34] = (Instruction){ "*NOP", op_NOOP, addr_ZPX, 2, 4 };
+    lookup[0x3C] = (Instruction){ "*NOP", op_NOOP, addr_ABX, 3, 4 };
+
+    lookup[0x1A] = (Instruction){ "*NOP", op_NOOP, addr_IMP, 1, 2 };
+    lookup[0x3A] = (Instruction){ "*NOP", op_NOOP, addr_IMP, 1, 2 };
+    lookup[0x5A] = (Instruction){ "*NOP", op_NOOP, addr_IMP, 1, 2 };
+    lookup[0x7A] = (Instruction){ "*NOP", op_NOOP, addr_IMP, 1, 2 };
+    lookup[0xDA] = (Instruction){ "*NOP", op_NOOP, addr_IMP, 1, 2 };
+    lookup[0xFA] = (Instruction){ "*NOP", op_NOOP, addr_IMP, 1, 2 };
+
+    lookup[0x04] = (Instruction){ "*NOP", op_NOOP, addr_ZPO, 2, 3 };
+    lookup[0x14] = (Instruction){ "*NOP", op_NOOP, addr_ZPX, 2, 4 };
+    lookup[0x44] = (Instruction){ "*NOP", op_NOOP, addr_ZPO, 2, 3 };
+    lookup[0x54] = (Instruction){ "*NOP", op_NOOP, addr_ZPX, 2, 4 };
+    lookup[0x64] = (Instruction){ "*NOP", op_NOOP, addr_ZPO, 2, 3 };
+    lookup[0x74] = (Instruction){ "*NOP", op_NOOP, addr_ZPX, 2, 4 };
+    lookup[0x80] = (Instruction){ "*NOP", op_NOOP, addr_IMM, 2, 2 };
+    lookup[0x82] = (Instruction){ "*NOP", op_NOOP, addr_IMM, 2, 2 };
+    lookup[0xC2] = (Instruction){ "*NOP", op_NOOP, addr_IMM, 2, 2 };
+    lookup[0xD4] = (Instruction){ "*NOP", op_NOOP, addr_ZPX, 2, 4 };
+    lookup[0xE2] = (Instruction){ "*NOP", op_NOOP, addr_IMM, 2, 2 };
+    lookup[0xF4] = (Instruction){ "*NOP", op_NOOP, addr_ZPX, 2, 4 };
+
+    lookup[0x0C] = (Instruction){ "*NOP", op_NOOP, addr_ABS, 3, 4 };
+    lookup[0x1C] = (Instruction){ "*NOP", op_NOOP, addr_ABX, 3, 4 };
+    lookup[0x5C] = (Instruction){ "*NOP", op_NOOP, addr_ABX, 3, 4 };
+    lookup[0x7C] = (Instruction){ "*NOP", op_NOOP, addr_ABX, 3, 4 };
+    lookup[0xDC] = (Instruction){ "*NOP", op_NOOP, addr_ABX, 3, 4 };
+    lookup[0xFC] = (Instruction){ "*NOP", op_NOOP, addr_ABX, 3, 4 };
+
+    lookup[0xEB] = (Instruction){ "*SBC", op_SBC, addr_IMM, 2, 2 };
+
 
 
 

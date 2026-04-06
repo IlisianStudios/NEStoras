@@ -11,6 +11,7 @@ Pulse pulse1;
 Pulse pulse2;
 Triangle triangle;
 Noise noise;
+DMC dmc;
 
 static double sample_accumulator = 0.0;
 static double cycles_per_sample = 1789773.0 / 44100.0;
@@ -30,6 +31,11 @@ static const uint32_t FRAME_PERIOD_5_PAL[5] = { 8313, 16627, 24939, 33253, 41565
 // Pointers set by apu_init based on region
 static const uint32_t *frame_periods_4 = FRAME_PERIOD_4_NTSC;
 static const uint32_t *frame_periods_5 = FRAME_PERIOD_5_NTSC;
+
+// DMC rate tables
+static const uint16_t dmc_ntsc_rates[16] = {428, 380, 340, 320, 286, 254, 226, 214,                                                                                                                                                               190, 160, 142, 128, 106,  84,  72,  54};
+static const uint16_t dmc_pal_rates[16]  = {398,354,316,298,276,236,210,198,176,148,132,118,98,78,66,50};
+static const uint16_t *dmc_rates;
 
 // PPU-timing thresholds for fake $2002 (set by apu_init)
 uint32_t ppu_vblank_end    = 2387;   // fc < this → vblank still active after NMI
@@ -58,6 +64,7 @@ void apu_init(void) {
     // Region-specific timing
     bool pal = (cartridge && cartridge->is_pal);
     if (pal) {
+        dmc_rates = dmc_pal_rates;
         nmi_period        = 33248;
         cycles_per_sample = 1662607.0 / 44100.0;
         frame_periods_4   = FRAME_PERIOD_4_PAL;
@@ -68,6 +75,7 @@ void apu_init(void) {
         ppu_sp0_hit_start = 5582;   // ~5000 * 33248/29780
         ppu_sp0_hit_end   = 32379;  // ~29000 * 33248/29780
     } else {
+        dmc_rates = dmc_ntsc_rates;
         nmi_period        = 29780;
         cycles_per_sample = 1789773.0 / 44100.0;
         frame_periods_4   = FRAME_PERIOD_4_NTSC;
@@ -381,6 +389,20 @@ uint8_t apu_read(uint16_t addr) {
     if (triangle.length_counter > 0) status |= 0x04;
     if (noise.length_counter > 0)    status |= 0x08;
     if (apu.frame_irq)               status |= 0x40;
+    if (dmc.bytes_remaining > 0) {
+        dmc.sample_buffer = bus_read(addr);
+        addr = (addr + 1) | 0x8000;
+        dmc.bytes_remaining--;
+        if (dmc.bytes_remaining == 0) {
+            if (dmc.loop) {
+                dmc.current_address = dmc.sample_address;
+                dmc.bytes_remaining = dmc.sample_length;
+            }
+            if (dmc.irq_enable) {
+                cpu_irq(&cpu);
+            }
+        }
+    }
     apu.frame_irq = false;
     return status;
 }
@@ -463,7 +485,7 @@ void apu_write(uint16_t addr, uint8_t data) {
             pulse2.envelope_start = true;
             pulse2.seq_pos = 0;
             break;
-            case 0x4008:
+        case 0x4008:
             triangle.length_halt        = (data >> 7) & 1;
             triangle.linear_reload      = data & 0x7F;
             break;
@@ -489,5 +511,18 @@ void apu_write(uint16_t addr, uint8_t data) {
             noise.length_counter  = LENGTH_TABLE[(data >> 3) & 0x1F];
             noise.envelope_start  = true;
             break;
+        case 0x4010:
+            dmc.irq_enable = (data >> 6) & 1;
+            dmc.loop = (data & 0x40) & 1;
+            dmc.timer_period = dmc_rates[data & 0x0F];
+            break;
+        case 0x4011:
+            dmc.direct_load = data & 0x7F;
+            break;
+        case 0x4012:
+            dmc.sample_address = 0xC000 + (data << 6);
+            break;
+        case 0x4013:
+            dmc.sample_length = (data << 4) | 1;
     }
 }

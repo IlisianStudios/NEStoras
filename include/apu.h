@@ -89,6 +89,23 @@ typedef struct {
 extern Noise noise;
 
 typedef struct {
+    bool     irq_enable;       // DMC interrupt enable
+    bool     loop;
+    uint16_t timer_period;   //
+    uint16_t sample_address;   // sample address = 0xC000 + (addr * 64)
+    uint16_t sample_length;    // sample length = (len * 16) + 1 bytes
+    uint16_t current_address;
+    uint16_t bytes_remaining;
+    uint8_t  shift_register;
+    uint8_t  bits_remaining;
+    bool     silence;          // if true, output is silent regardless of shift register
+    uint16_t direct_load;
+    uint8_t sample_buffer;
+} DMC;
+
+extern DMC dmc;
+
+typedef struct {
     // --- frame sequencer ---
     uint32_t frame_cycles;   // counts up, resets at period
     uint8_t  frame_mode;     // 0 = 4-step, 1 = 5-step

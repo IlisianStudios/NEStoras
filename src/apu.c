@@ -329,6 +329,22 @@ void apu_step(CPU *cpu) {
         float absmix = mix < 0 ? -mix : mix;
         if (absmix > apu_dbg.peak_sample) apu_dbg.peak_sample = absmix;
         ring_buffer_push(mix);
+
+        // Waveform capture — always on, negligible cost
+        int wp = apu_dbg.wave_pos;
+        apu_dbg.wave_p1[wp]  = (float)pulse_output(&pulse1, apu.pulse1_enabled) / 15.0f;
+        apu_dbg.wave_p2[wp]  = (float)pulse_output(&pulse2, apu.pulse2_enabled) / 15.0f;
+        apu_dbg.wave_tri[wp] = (apu.triangle_enabled
+                                && triangle.length_counter > 0
+                                && triangle.linear_counter > 0)
+                               ? TRIANGLE_TABLE[triangle.seq_pos] / 15.0f : 0.0f;
+        uint8_t nvol = noise.constant_vol ? noise.envelope_vol : noise.envelope_decay;
+        apu_dbg.wave_noi[wp] = (apu.noise_enabled
+                                && noise.length_counter > 0
+                                && (noise.lfsr & 1) == 0)
+                               ? nvol / 15.0f : 0.0f;
+        apu_dbg.wave_mix[wp] = mix * 0.5f;   // mix is 2× boosted; scale back to [0,1]
+        apu_dbg.wave_pos = (wp + 1) % APU_WAVE_LEN;
     }
 }
 

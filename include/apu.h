@@ -118,6 +118,9 @@ uint8_t apu_read(uint16_t addr); // $4015 only
 void apu_write(uint16_t addr, uint8_t data); // $4000-$4017
 uint32_t apu_get_frame_cycles(void);
 
+// Per-channel waveform ring buffer — filled every sample tick, read by debug window
+#define APU_WAVE_LEN 256
+
 // APU debug diagnostics — counters are always tracked, output gated by `enabled`
 typedef struct {
     bool     enabled;            // set true when cpu.testing_mode is on
@@ -131,6 +134,14 @@ typedef struct {
     uint32_t ppu_write_count;    // $2000 NMI-enable toggling
     uint32_t diag_interval;      // frames between debug prints
     uint32_t diag_counter;       // counts up to diag_interval
+
+    // Waveform ring buffers — values normalised to [0, 1]
+    float wave_p1[APU_WAVE_LEN];
+    float wave_p2[APU_WAVE_LEN];
+    float wave_tri[APU_WAVE_LEN];
+    float wave_noi[APU_WAVE_LEN];
+    float wave_mix[APU_WAVE_LEN];
+    int   wave_pos;              // next-write index (circular)
 } APUDebug;
 
 extern APUDebug apu_dbg;

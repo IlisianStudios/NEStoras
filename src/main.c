@@ -14,6 +14,8 @@ bool running = true;
 CPU cpu;
 static SDL_AudioDeviceID audio_dev = 0;
 Timing timing;
+static bool cpu_paused = false;
+static bool cpu_step_one = false;  // advance exactly one instruction
 
 void debug_nestest(void) {
     printf("DEBUG mode enabled\n");
@@ -174,6 +176,15 @@ void SDL2_loop(void) {
                 case SDLK_d:
                     debug_window_toggle();
                     break;
+                case SDLK_r:
+                    cpu_paused = !cpu_paused;
+                    debug_log(cpu_paused ? "--- CPU PAUSED ---" : "--- CPU RESUMED ---");
+                    break;
+                case SDLK_q:
+                    if (cpu_paused) {
+                        cpu_step_one = true;
+                    }
+                    break;
                 default:
                     break;
             }
@@ -211,6 +222,7 @@ int main(int argc, char** argv) {
 
         if (cartridge == NULL) {
             // Still update debug window while idle (keeps log visible)
+            debug_window_set_paused(cpu_paused);
             debug_window_update(&cpu);
             SDL_Delay(10);
             continue;
@@ -223,15 +235,29 @@ int main(int argc, char** argv) {
             continue;
         }
 
-        if (cycles_to_run == UINT32_MAX)
+        if (cpu_paused && !cpu_step_one) {
+            // Still update debug window while paused
+            debug_window_set_paused(cpu_paused);
+            debug_window_update(&cpu);
+            SDL_Delay(1);
+            continue;
+        }
+
+        if (cpu_step_one) {
+            // Execute exactly one CPU instruction
+            cpu_step_one = false;
             run_cycles(&cpu, 1);
-        else
+        } else if (cycles_to_run == UINT32_MAX) {
+            run_cycles(&cpu, 1);
+        } else {
             run_cycles(&cpu, cycles_to_run);
+        }
 
         // Testing-mode diagnostics (only prints when apu_dbg.enabled is set)
         apu_debug_print(&cpu);
 
         // Update debug window (self-throttled, no-op when hidden)
+        debug_window_set_paused(cpu_paused);
         debug_window_update(&cpu);
 
         if (cpu.nestest_passed) {

@@ -112,6 +112,12 @@ void handle_event_type(const SDL_Event *event) {
             ring_buffer_init();
             apu_debug_reset();
 
+            // If the debug window is open, preserve testing mode
+            if (debug_window_visible()) {
+                cpu.testing_mode = true;
+                apu_dbg.enabled = true;
+            }
+
             const char *filename = strrchr(event->drop.file, '/');
             filename = filename ? filename + 1 : event->drop.file;
             printf("ROM loaded: %s\n", filename);
@@ -152,9 +158,10 @@ void SDL2_loop(void) {
                 case SDLK_RIGHT:  mask = 0x01; break;  // Right
                 default: break;
             }
-            if (mask && pressed)
-                controller_state[0] |= mask;
-                if (mask && !pressed) controller_state[0] &= ~mask;
+            if (mask) {
+                if (pressed) controller_state[0] |= mask;
+                else         controller_state[0] &= ~mask;
+            }
 
         }
         if (event.type == SDL_KEYDOWN) {
@@ -203,6 +210,8 @@ int main(int argc, char** argv) {
         SDL2_loop();
 
         if (cartridge == NULL) {
+            // Still update debug window while idle (keeps log visible)
+            debug_window_update(&cpu);
             SDL_Delay(10);
             continue;
         }
@@ -227,7 +236,9 @@ int main(int argc, char** argv) {
 
         if (cpu.nestest_passed) {
             cpu.nestest_passed = false;
+            debug_log("[NESTEST] completed — drop a ROM to continue");
             try_free_cartridge();
+            // testing_mode and apu_dbg.enabled stay on if debug window is open
         }
 
     }

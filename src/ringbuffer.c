@@ -2,6 +2,16 @@
 
 #include <string.h>
 
+RingBuffer ring;
+
+uint32_t ring_buffer_available(void) {
+    return (ring.write_pos - ring.read_pos) & RING_BUFFER_MASK;
+}
+
+uint32_t ring_buffer_free_space(void) {
+    return RING_BUFFER_SIZE - 1 - ring_buffer_available();
+}
+
 void ring_buffer_push(float sample) {
     if (ring_buffer_free_space() == 0) return;
 

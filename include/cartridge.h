@@ -24,6 +24,7 @@ struct Cartridge{
     uint32_t chr_size;
     uint8_t mapper_id;
     uint8_t mirroring;
+    bool    is_pal;        // true for PAL (50 Hz) ROMs
 
     Mapper mapper;
 };

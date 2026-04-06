@@ -1,17 +1,121 @@
 #include "apu.h"
 
 #include "cpu.h"
+#include "cartridge.h"
 #include "ringbuffer.h"
+#include <string.h>
 
 APU apu;
 
-void apu_init(void) {
-    noise.lfsr = 1;
+Pulse pulse1;
+Pulse pulse2;
+Triangle triangle;
+Noise noise;
+
+static double sample_accumulator = 0.0;
+static double cycles_per_sample = 1789773.0 / 44100.0;
+static bool otherCycle = false;
+
+static uint32_t nmi_cycles = 0;
+static uint32_t nmi_period = 29780;  // NTSC default; PAL = 33248
+
+// NTSC APU frame counter periods (CPU cycles)
+static const uint32_t FRAME_PERIOD_4_NTSC[4] = { 7457, 14913, 22371, 29829 };
+static const uint32_t FRAME_PERIOD_5_NTSC[5] = { 7457, 14913, 22371, 29829, 37281 };
+
+// PAL APU frame counter periods (CPU cycles)
+static const uint32_t FRAME_PERIOD_4_PAL[4] = { 8313, 16627, 24939, 33253 };
+static const uint32_t FRAME_PERIOD_5_PAL[5] = { 8313, 16627, 24939, 33253, 41565 };
+
+// Pointers set by apu_init based on region
+static const uint32_t *frame_periods_4 = FRAME_PERIOD_4_NTSC;
+static const uint32_t *frame_periods_5 = FRAME_PERIOD_5_NTSC;
+
+// PPU-timing thresholds for fake $2002 (set by apu_init)
+uint32_t ppu_vblank_end    = 2387;   // fc < this → vblank still active after NMI
+uint32_t ppu_vblank_start  = 27393;  // fc >= this → entering vblank
+uint32_t ppu_sp0_hit_start = 5000;   // fc >= this → sprite 0 hit
+uint32_t ppu_sp0_hit_end   = 29000;  // fc < this → sprite 0 hit
+
+APUDebug apu_dbg;
+
+uint32_t apu_get_frame_cycles(void) {
+    return nmi_cycles;
 }
 
-// NTSC periods (in CPU cycles):
-static const uint32_t FRAME_PERIOD_4[4] = { 3728, 7456, 11185, 14914 };
-static const uint32_t FRAME_PERIOD_5[5] = { 3728, 7456, 11185, 14914, 18640 };
+void apu_init(void) {
+    memset(&pulse1,   0, sizeof(pulse1));
+    memset(&pulse2,   0, sizeof(pulse2));
+    memset(&triangle, 0, sizeof(triangle));
+    memset(&noise,    0, sizeof(noise));
+    memset(&apu,      0, sizeof(apu));
+    noise.lfsr  = 1;
+    nmi_cycles  = 0;
+    sample_accumulator = 0.0;
+    otherCycle  = false;
+    ppu_nmi_enable = false;
+
+    // Region-specific timing
+    bool pal = (cartridge && cartridge->is_pal);
+    if (pal) {
+        nmi_period        = 33248;
+        cycles_per_sample = 1662607.0 / 44100.0;
+        frame_periods_4   = FRAME_PERIOD_4_PAL;
+        frame_periods_5   = FRAME_PERIOD_5_PAL;
+        // Fake PPU thresholds scaled for PAL frame
+        ppu_vblank_end    = 2665;   // ~2387 * 33248/29780
+        ppu_vblank_start  = 30583;  // ~27393 * 33248/29780
+        ppu_sp0_hit_start = 5582;   // ~5000 * 33248/29780
+        ppu_sp0_hit_end   = 32379;  // ~29000 * 33248/29780
+    } else {
+        nmi_period        = 29780;
+        cycles_per_sample = 1789773.0 / 44100.0;
+        frame_periods_4   = FRAME_PERIOD_4_NTSC;
+        frame_periods_5   = FRAME_PERIOD_5_NTSC;
+        ppu_vblank_end    = 2387;
+        ppu_vblank_start  = 27393;
+        ppu_sp0_hit_start = 5000;
+        ppu_sp0_hit_end   = 29000;
+    }
+}
+
+void apu_debug_reset(void) {
+    memset(&apu_dbg, 0, sizeof(apu_dbg));
+    apu_dbg.diag_interval = 300;  // default: print every 300 frames
+}
+
+void apu_debug_print(CPU *cpu) {
+    if (!apu_dbg.enabled) return;
+
+    apu_dbg.diag_counter++;
+    if (apu_dbg.diag_counter < apu_dbg.diag_interval) return;
+    apu_dbg.diag_counter = 0;
+
+    uint8_t p1v = pulse1.constant_vol ? pulse1.envelope_vol : pulse1.envelope_decay;
+    uint8_t p2v = pulse2.constant_vol ? pulse2.envelope_vol : pulse2.envelope_decay;
+    uint8_t nv  = noise.constant_vol  ? noise.envelope_vol  : noise.envelope_decay;
+
+    printf("[APU] samples: %u/%u nonzero (peak=%.4f) | ring=%u/%d\n",
+           apu_dbg.nonzero_samples, apu_dbg.total_samples, apu_dbg.peak_sample,
+           ring_buffer_available(), RING_BUFFER_SIZE);
+
+    printf("  $4015=$%02X (wr=%u) | en: p1=%d p2=%d tri=%d noi=%d\n",
+           apu_dbg.last_status_value, apu_dbg.status_write_count,
+           apu.pulse1_enabled, apu.pulse2_enabled,
+           apu.triangle_enabled, apu.noise_enabled);
+
+    printf("  p1: vol=%d len=%d tmr=%d duty=%d | p2: vol=%d len=%d tmr=%d duty=%d\n",
+           p1v, pulse1.length_counter, pulse1.timer_period, pulse1.duty,
+           p2v, pulse2.length_counter, pulse2.timer_period, pulse2.duty);
+
+    printf("  tri: len=%d lin=%d tmr=%d | noi: vol=%d len=%d lfsr=$%04X mode=%d\n",
+           triangle.length_counter, triangle.linear_counter, triangle.timer_period,
+           nv, noise.length_counter, noise.lfsr, noise.mode);
+
+    printf("  NMIs=%u apu_wr=%u PC=$%04X cyc=%llu\n",
+           apu_dbg.nmi_count, apu_dbg.apu_write_count,
+           cpu->pc, (unsigned long long)cpu->total_cycles);
+}
 
 void quarter_frame_pulse(Pulse *pulse) {
     if (pulse->envelope_start) {
@@ -118,7 +222,10 @@ static uint8_t pulse_output(Pulse *p, bool enabled) {
     if (p->length_counter == 0) return 0;
     if (p->timer_period < 8) return 0;
     if (!DUTY_TABLE[p->duty][p->seq_pos]) return 0;
-    return p->volume;
+    // Compute volume on-the-fly — the cached p->volume can be stale
+    // between $4000/$4004 writes and the next quarter-frame clock.
+    uint8_t vol = p->constant_vol ? p->envelope_vol : p->envelope_decay;
+    return vol;
 }
 
 static void clock_pulse_timer(Pulse *p) {
@@ -131,20 +238,36 @@ static void clock_pulse_timer(Pulse *p) {
 }
 
 void apu_step(CPU *cpu) {
-    clock_pulse_timer(&pulse1);
-    clock_pulse_timer(&pulse2);
-
-    // Noise timer + LFSR
-    if (noise.timer_current == 0) {
-        noise.timer_current = noise.timer_period;
-        uint16_t feedback = (noise.lfsr & 1) ^
-                            ((noise.mode ? (noise.lfsr >> 6) : (noise.lfsr >> 1)) & 1);
-        noise.lfsr = (noise.lfsr >> 1) | (feedback << 14);
-    } else {
-        noise.timer_current--;
+    // Fake NMI — PPU vblank fires every frame (NTSC: ~29780, PAL: ~33248 CPU cycles)
+    if (++nmi_cycles >= nmi_period) {
+        nmi_cycles = 0;
+        if (ppu_nmi_enable) {
+            cpu_nmi(cpu);
+            apu_dbg.nmi_count++;
+        }
     }
 
-    // Triangle timer
+    // The APU runs at half the CPU clock.
+    // Pulse and noise timers tick every other CPU cycle.
+    // Triangle ticks every CPU cycle.
+    otherCycle = !otherCycle;
+
+    if (otherCycle) {
+        clock_pulse_timer(&pulse1);
+        clock_pulse_timer(&pulse2);
+
+        // Noise timer + LFSR (also clocked at APU rate)
+        if (noise.timer_current == 0) {
+            noise.timer_current = noise.timer_period;
+            uint16_t feedback = (noise.lfsr & 1) ^
+                                ((noise.mode ? (noise.lfsr >> 6) : (noise.lfsr >> 1)) & 1);
+            noise.lfsr = (noise.lfsr >> 1) | (feedback << 14);
+        } else {
+            noise.timer_current--;
+        }
+    }
+
+    // Triangle timer (clocked every CPU cycle)
     if (triangle.timer_current == 0) {
         triangle.timer_current = triangle.timer_period;
         if (triangle.length_counter > 0 && triangle.linear_counter > 0)
@@ -155,18 +278,26 @@ void apu_step(CPU *cpu) {
 
     apu.frame_cycles++;
 
-    const uint32_t *periods = (apu.frame_mode == 0) ? FRAME_PERIOD_4 : FRAME_PERIOD_5;
+    const uint32_t *periods = (apu.frame_mode == 0) ? frame_periods_4 : frame_periods_5;
     uint8_t steps = (apu.frame_mode == 0) ? 4 : 5;
 
     for (uint8_t i = 0; i < steps; i++) {
         if (apu.frame_cycles == periods[i]) {
 
-            bool is_half = (i == 1) || (i == 3);  // steps 2 and 4 (0-indexed 1 and 3)
-            bool is_5step_extra = (apu.frame_mode == 1 && i == 4);
+            // Mode 1, step 4 (i==3): nothing happens, counter keeps running
+            if (apu.frame_mode == 1 && i == 3)
+                break;
 
-            clock_quarter_frame();  // always fires at every step
+            clock_quarter_frame();  // envelopes + triangle linear counter
 
-            if (is_half && !is_5step_extra) {
+            // Half frame: length counters + sweep units
+            // Mode 0: fires at steps 2 and 4 (i==1, i==3)
+            // Mode 1: fires at steps 2 and 5 (i==1, i==4)
+            bool is_half = (i == 1) ||
+                           (apu.frame_mode == 0 && i == 3) ||
+                           (apu.frame_mode == 1 && i == 4);
+
+            if (is_half) {
                 clock_half_frame();
             }
 
@@ -191,8 +322,12 @@ void apu_step(CPU *cpu) {
     sample_accumulator += 1.0;
     if (sample_accumulator >= cycles_per_sample) {
         sample_accumulator -= cycles_per_sample;
-        float sample = apu_mix();          // get current output
-        ring_buffer_push(sample);          // push to audio thread
+        float mix = apu_mix();
+        apu_dbg.total_samples++;
+        if (mix > 0.001f || mix < -0.001f) apu_dbg.nonzero_samples++;
+        float absmix = mix < 0 ? -mix : mix;
+        if (absmix > apu_dbg.peak_sample) apu_dbg.peak_sample = absmix;
+        ring_buffer_push(mix);
     }
 }
 
@@ -209,19 +344,21 @@ float apu_mix(void) {
         tri = TRIANGLE_TABLE[triangle.seq_pos];
 
     uint8_t noi = 0;
-    if (apu.noise_enabled && noise.length_counter > 0 && (noise.lfsr & 1) == 0)
-        noi = noise.volume;
+    if (apu.noise_enabled && noise.length_counter > 0 && (noise.lfsr & 1) == 0) {
+        // Compute noise volume on-the-fly (same fix as pulse)
+        noi = noise.constant_vol ? noise.envelope_vol : noise.envelope_decay;
+    }
 
     float tnd_out = 0.0f;
     float tnd_sum = (float)tri / 8227.0f + (float)noi / 12241.0f;
     if (tnd_sum > 0.0f)
         tnd_out = 159.79f / (1.0f / tnd_sum + 100.0f);
 
-    return pulse_out + tnd_out;
+    return (pulse_out + tnd_out) * 2.0f;
 }
 
 uint8_t apu_read(uint16_t addr) {
-    (void)addr; // only $4015 is readable
+    if (addr != 0x4015) return 0;
     uint8_t status = 0;
     if (pulse1.length_counter > 0)   status |= 0x01;
     if (pulse2.length_counter > 0)   status |= 0x02;
@@ -233,6 +370,7 @@ uint8_t apu_read(uint16_t addr) {
 }
 
 void apu_write(uint16_t addr, uint8_t data) {
+    apu_dbg.apu_write_count++;
     switch (addr) {
         case 0x4017: {
             apu.frame_mode = (data >> 7) & 1;
@@ -251,6 +389,8 @@ void apu_write(uint16_t addr, uint8_t data) {
             break;
         }
         case 0x4015:
+            apu_dbg.status_write_count++;
+            apu_dbg.last_status_value = data;
             apu.pulse1_enabled   = (data >> 0) & 1;
             apu.pulse2_enabled   = (data >> 1) & 1;
             apu.triangle_enabled = (data >> 2) & 1;
@@ -266,6 +406,7 @@ void apu_write(uint16_t addr, uint8_t data) {
             pulse1.length_halt = (data >> 5) & 1;
             pulse1.constant_vol = (data >> 4) & 1;
             pulse1.envelope_vol = data & 0x0F;
+            pulse1.volume = pulse1.constant_vol ? pulse1.envelope_vol : pulse1.envelope_decay;
             break;
         case 0x4001:
             pulse1.sweep_enabled = (data >> 7) & 1;
@@ -288,6 +429,7 @@ void apu_write(uint16_t addr, uint8_t data) {
             pulse2.length_halt = (data >> 5) & 1;
             pulse2.constant_vol = (data >> 4) & 1;
             pulse2.envelope_vol = data & 0x0F;
+            pulse2.volume = pulse2.constant_vol ? pulse2.envelope_vol : pulse2.envelope_decay;
             break;
         case 0x4005:
             pulse2.sweep_enabled = (data >> 7) & 1;
@@ -321,6 +463,7 @@ void apu_write(uint16_t addr, uint8_t data) {
             noise.length_halt  = (data >> 5) & 1;
             noise.constant_vol = (data >> 4) & 1;
             noise.envelope_vol = data & 0x0F;
+            noise.volume = noise.constant_vol ? noise.envelope_vol : noise.envelope_decay;
             break;
         case 0x400E:
             noise.mode         = (data >> 7) & 1;

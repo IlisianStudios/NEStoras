@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <string.h>
 #include <mappers.h>
 
 #include "cpu.h"
@@ -38,7 +39,7 @@ bool cartridge_load(const char* path) {
         return false;
     }
 
-    cartridge =  (Cartridge *)malloc(sizeof(Cartridge));
+    cartridge = (Cartridge *)calloc(1, sizeof(Cartridge));
 
     uint8_t header[16];
     fread(header, 1, 16, f);
@@ -56,15 +57,39 @@ bool cartridge_load(const char* path) {
     cartridge->mapper_id = (header[7] & 0xF0) | (header[6] >> 4);
     cartridge->mirroring = header[6] & 0x01;
 
+    // PAL detection: iNES header byte 9 bit 0, plus filename heuristic
+    cartridge->is_pal = (header[9] & 0x01) != 0;
+    // Filename heuristic: "(Europe)" or "(PAL)" in path
+    if (!cartridge->is_pal) {
+        if (strstr(path, "Europe") || strstr(path, "europe") ||
+            strstr(path, "(PAL)")  || strstr(path, "(pal)")) {
+            cartridge->is_pal = true;
+        }
+    }
+    printf("ROM: PRG=%uKB CHR=%uKB mapper=%u %s\n",
+           cartridge->prg_size / 1024, cartridge->chr_size / 1024,
+           cartridge->mapper_id, cartridge->is_pal ? "PAL" : "NTSC");
+
     // skip trainer, no idea what a trainer is in this context
     if (header[6] & 0x04) fseek(f, 512, SEEK_CUR);
 
     cartridge->prg_rom = malloc(cartridge->prg_size);
+    if (!cartridge->prg_rom) {
+        fclose(f);
+        free(cartridge);
+        cartridge = NULL;
+        return false;
+    }
 
-    if (cartridge->chr_size == 0)
-        cartridge->chr_rom = malloc(8192);
-    else
-        cartridge->chr_rom = malloc(cartridge->chr_size);
+    size_t chr_alloc = cartridge->chr_size == 0 ? 8192 : cartridge->chr_size;
+    cartridge->chr_rom = malloc(chr_alloc);
+    if (!cartridge->chr_rom) {
+        fclose(f);
+        free(cartridge->prg_rom);
+        free(cartridge);
+        cartridge = NULL;
+        return false;
+    }
 
     add_mapper(cartridge);
     fread(cartridge->prg_rom, 1, cartridge->prg_size, f);
@@ -78,7 +103,5 @@ bool cartridge_load(const char* path) {
 void cartridge_free(void) {
     free(cartridge->prg_rom);
     free(cartridge->chr_rom);
-
-    cartridge->prg_rom = NULL;
-    cartridge->chr_rom = NULL;
+    free(cartridge);
 }

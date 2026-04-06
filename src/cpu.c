@@ -184,10 +184,12 @@ void cpu_step(CPU *cpu) {
     #ifndef NDEBUG
     if (cpu->nestest_comp && !nestest_compare(&nestest_log, cpu, &inst, pc_snapshot)) {
         cpu->nestest_comp = false;
-        if (feof(nestest_log.file))
+        if (feof(nestest_log.file)) {
             printf("[NESTEST] ALL TESTS PASSED\n");
-        else
+            cpu->nestest_passed = true;
+        } else {
             printf("[NESTEST] FAILED — stopped comparing, emulator still running\n");
+        }
         nestest_close(&nestest_log);
     }
     #endif

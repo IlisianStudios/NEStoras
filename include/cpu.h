@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 
-Timing timing;
+extern Timing timing;
 
 // Flag bit positions
 #define FLAG_C 0x01  // Carry
@@ -39,6 +39,7 @@ typedef struct{
 
     bool testing_mode;
     bool nestest_comp;
+    bool nestest_passed;
 } CPU;
 
 void cpu_reset(CPU *cpu);

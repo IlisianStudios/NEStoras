@@ -19,14 +19,10 @@ typedef struct {
     volatile uint32_t read_pos;    // written by audio thread
 } RingBuffer;
 
-static RingBuffer ring;
+extern RingBuffer ring;
 
-static inline uint32_t ring_buffer_available(void) {
-    return (ring.write_pos - ring.read_pos) & RING_BUFFER_MASK;
-}
-
-static inline uint32_t ring_buffer_free_space(void) {
-    return RING_BUFFER_SIZE - 1 - ring_buffer_available();
-}
+uint32_t ring_buffer_available(void);
+uint32_t ring_buffer_free_space(void);
 
 void ring_buffer_init(void);
+

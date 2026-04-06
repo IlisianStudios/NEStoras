@@ -8,10 +8,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-static double sample_accumulator = 0.0;
 typedef struct Pulse Pulse;
-static const double cycles_per_sample = 1789773.0 / 44100.0;
-static bool otherCycle = false;
+
 static const uint8_t LENGTH_TABLE[32] = {
     10, 254, 20,  2, 40,  4, 80,  6,
    160,   8, 60, 10, 14, 12, 26, 14,
@@ -53,8 +51,8 @@ static const uint8_t TRIANGLE_TABLE[32] = {
      0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,
 };
 
-static  Pulse pulse1;
-static  Pulse pulse2;
+extern Pulse pulse1;
+extern Pulse pulse2;
 
 typedef struct {
     uint8_t  seq_pos;
@@ -67,7 +65,7 @@ typedef struct {
     bool     linear_reload_flag;
 } Triangle;
 
-static Triangle triangle;
+extern Triangle triangle;
 
 static const uint16_t NOISE_PERIOD_TABLE[16] = {
     4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068
@@ -88,7 +86,7 @@ typedef struct {
     uint16_t lfsr;              // 15-bit shift register, must init to 1
 } Noise;
 
-static Noise noise;
+extern Noise noise;
 
 typedef struct {
     // --- frame sequencer ---
@@ -118,3 +116,31 @@ void apu_step(CPU *cpu);
 float apu_mix(void);
 uint8_t apu_read(uint16_t addr); // $4015 only
 void apu_write(uint16_t addr, uint8_t data); // $4000-$4017
+uint32_t apu_get_frame_cycles(void);
+
+// APU debug diagnostics — counters are always tracked, output gated by `enabled`
+typedef struct {
+    bool     enabled;            // set true when cpu.testing_mode is on
+    uint32_t nmi_count;
+    uint32_t apu_write_count;
+    uint32_t status_write_count; // $4015 writes
+    uint32_t nonzero_samples;
+    uint32_t total_samples;
+    uint8_t  last_status_value;  // last value written to $4015
+    float    peak_sample;
+    uint32_t ppu_write_count;    // $2000 NMI-enable toggling
+    uint32_t diag_interval;      // frames between debug prints
+    uint32_t diag_counter;       // counts up to diag_interval
+} APUDebug;
+
+extern APUDebug apu_dbg;
+
+void apu_debug_reset(void);
+void apu_debug_print(CPU *cpu);
+
+// PPU timing thresholds (set by apu_init based on PAL/NTSC)
+extern uint32_t ppu_vblank_end;
+extern uint32_t ppu_vblank_start;
+extern uint32_t ppu_sp0_hit_start;
+extern uint32_t ppu_sp0_hit_end;
+

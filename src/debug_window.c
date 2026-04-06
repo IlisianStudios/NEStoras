@@ -13,21 +13,37 @@
 
 // ---------- layout constants --------------------------------------------
 
-#define DBG_WIN_W    360
-#define DBG_WIN_H    680
-#define FONT_SIZE    18
-#define LINE_H       19
+#define DBG_WIN_W    520
+#define DBG_WIN_H    960
+#define FONT_SIZE    14
+#define LINE_H       15
 #define PAD_X        12
 #define PAD_Y        10
 
-// Top half: scrolling log
-#define LOG_AREA_H   (DBG_WIN_H / 2)
+// Text log
 #define LOG_MAX_LINES 128
 #define LOG_LINE_LEN  96
-#define LOG_VISIBLE   ((LOG_AREA_H - PAD_Y) / LINE_H - 1)  // -1 for heading
 
-// Bottom half: live state
-#define STATE_Y       (LOG_AREA_H + 6)
+// Volume bars — drawn on their own slim row below the channel text
+#define BAR_FULL_W    (DBG_WIN_W - PAD_X * 2)
+#define BAR_SLIM_H    4
+
+// State section height — must match render_state() exactly:
+//   CPU(3 lines +6)  APU(1 +4)
+//   3 channels(line+bar+gap4)  last channel(+6 extra)
+//   Audio hdr(1)  Audio data(1)  Audio bar(+gap4+6)
+//   Controller(1+6)  Cartridge(1+6)  Separator(4)
+//   Footer(2 lines + PAD_Y)
+#define STATE_H  ((3*LINE_H+6) + (LINE_H+4) \
+                 + 3*(LINE_H+BAR_SLIM_H+4) + (LINE_H+BAR_SLIM_H+4+6) \
+                 + LINE_H + LINE_H + (BAR_SLIM_H+4+6) \
+                 + (LINE_H+6) + (LINE_H+6) + 4 \
+                 + LINE_H + LINE_H + PAD_Y)
+
+// Log area gets everything above the state section
+#define STATE_Y         (DBG_WIN_H - STATE_H)
+#define LOG_AREA_H      (STATE_Y - 2)
+#define LOG_VISIBLE     ((LOG_AREA_H - PAD_Y) / LINE_H - 1)
 
 // ---------- colour palette ----------------------------------------------
 
@@ -58,7 +74,8 @@ static bool          dbg_visible  = false;
 static bool         *testing_mode_ptr = NULL;  // points to cpu.testing_mode
 
 static uint32_t      last_draw_tick = 0;
-static const uint32_t DRAW_INTERVAL_MS = 33;  // ~30 fps
+static const uint32_t DRAW_INTERVAL_MS = 16;  // ~60 fps
+static bool          show_paused = false;
 
 // ---------- font search -------------------------------------------------
 
@@ -125,6 +142,10 @@ void debug_log(const char *fmt, ...) {
     if (log_count < LOG_MAX_LINES) log_count++;
 }
 
+void debug_window_set_paused(bool paused) {
+    show_paused = paused;
+}
+
 bool debug_window_init(SDL_Window *main_window, bool *testing_mode) {
     main_win = main_window;
     testing_mode_ptr = testing_mode;
@@ -145,7 +166,7 @@ bool debug_window_init(SDL_Window *main_window, bool *testing_mode) {
         "NEStoras Debug",
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
         DBG_WIN_W, DBG_WIN_H,
-        SDL_WINDOW_HIDDEN | SDL_WINDOW_ALLOW_HIGHDPI
+        SDL_WINDOW_HIDDEN
     );
     if (!dbg_win) {
         fprintf(stderr, "debug_window: SDL_CreateWindow failed: %s\n", SDL_GetError());
@@ -237,16 +258,16 @@ static void render_state(const CPU *cpu) {
     int y = STATE_Y;
     char buf[LOG_LINE_LEN];
 
-    // ── CPU
-    draw_text(PAD_X, y, "--- CPU ---", COL_HEADING);
+    // ── CPU ──────────────────────────────────────────
+    draw_text(PAD_X, y, "CPU", COL_HEADING);
     y += LINE_H;
 
-    snprintf(buf, sizeof(buf), "PC=$%04X A=$%02X X=$%02X Y=$%02X SP=$%02X",
+    snprintf(buf, sizeof(buf), "PC=$%04X  A=$%02X  X=$%02X  Y=$%02X  SP=$%02X",
              cpu->pc, cpu->a, cpu->x, cpu->y, cpu->sp);
     draw_text(PAD_X, y, buf, COL_VALUE);
     y += LINE_H;
 
-    snprintf(buf, sizeof(buf), "P=$%02X [%c%c%c%c%c%c%c%c] CYC=%llu",
+    snprintf(buf, sizeof(buf), "P=$%02X [%c%c%c%c%c%c%c%c]  CYC=%llu",
              cpu->status,
              cpu->status & FLAG_N ? 'N' : '-',
              cpu->status & FLAG_V ? 'V' : '-',
@@ -258,100 +279,119 @@ static void render_state(const CPU *cpu) {
              cpu->status & FLAG_C ? 'C' : '-',
              (unsigned long long)cpu->total_cycles);
     draw_text(PAD_X, y, buf, COL_VALUE);
-    y += LINE_H + 4;
+    y += LINE_H + 6;
 
-    // ── APU
-    draw_text(PAD_X, y, "--- APU ---", COL_HEADING);
-    y += LINE_H;
-
-    snprintf(buf, sizeof(buf), "$4015=$%02X  NMIs=%u  wr=%u",
+    // ── APU ──────────────────────────────────────────
+    draw_text(PAD_X, y, "APU", COL_HEADING);
+    snprintf(buf, sizeof(buf), "$4015=$%02X   NMIs=%u   writes=%u",
              apu_dbg.last_status_value, apu_dbg.nmi_count, apu_dbg.apu_write_count);
-    draw_text(PAD_X, y, buf, COL_LABEL);
+    draw_text(PAD_X + 40, y, buf, COL_LABEL);
     y += LINE_H + 4;
 
-    // ── Channels (compact: one line each + volume bar)
+    // ── Channels ─────────────────────────────────────
     {
         uint8_t vol = pulse1.constant_vol ? pulse1.envelope_vol : pulse1.envelope_decay;
         bool on = apu.pulse1_enabled && pulse1.length_counter > 0 && vol > 0;
-        snprintf(buf, sizeof(buf), "P1 %s v=%2d l=%3d t=%4d d=%d",
+        snprintf(buf, sizeof(buf), "P1 %s  vol=%2d  len=%3d  tmr=%4d  duty=%d",
                  on ? "ON " : "OFF", vol, pulse1.length_counter,
                  pulse1.timer_period, pulse1.duty);
         draw_text(PAD_X, y, buf, on ? COL_ON : COL_OFF);
-        draw_bar(DBG_WIN_W - PAD_X - 60, y + 1, 50, LINE_H - 2, vol / 15.0f, COL_ON);
         y += LINE_H;
+        draw_bar(PAD_X, y, BAR_FULL_W, BAR_SLIM_H, vol / 15.0f, on ? COL_ON : COL_DIM);
+        y += BAR_SLIM_H + 4;
     }
     {
         uint8_t vol = pulse2.constant_vol ? pulse2.envelope_vol : pulse2.envelope_decay;
         bool on = apu.pulse2_enabled && pulse2.length_counter > 0 && vol > 0;
-        snprintf(buf, sizeof(buf), "P2 %s v=%2d l=%3d t=%4d d=%d",
+        snprintf(buf, sizeof(buf), "P2 %s  vol=%2d  len=%3d  tmr=%4d  duty=%d",
                  on ? "ON " : "OFF", vol, pulse2.length_counter,
                  pulse2.timer_period, pulse2.duty);
         draw_text(PAD_X, y, buf, on ? COL_ON : COL_OFF);
-        draw_bar(DBG_WIN_W - PAD_X - 60, y + 1, 50, LINE_H - 2, vol / 15.0f, COL_ON);
         y += LINE_H;
+        draw_bar(PAD_X, y, BAR_FULL_W, BAR_SLIM_H, vol / 15.0f, on ? COL_ON : COL_DIM);
+        y += BAR_SLIM_H + 4;
     }
     {
         bool on = apu.triangle_enabled && triangle.length_counter > 0
                   && triangle.linear_counter > 0;
-        snprintf(buf, sizeof(buf), "TR %s l=%3d lin=%3d t=%4d",
-                 on ? "ON " : "OFF", triangle.length_counter,
-                 triangle.linear_counter, triangle.timer_period);
-        draw_text(PAD_X, y, buf, on ? COL_ON : COL_OFF);
         float pct = on ? TRIANGLE_TABLE[triangle.seq_pos] / 15.0f : 0.0f;
-        draw_bar(DBG_WIN_W - PAD_X - 60, y + 1, 50, LINE_H - 2,
-                 pct, (SDL_Color){100, 200, 255, 255});
+        snprintf(buf, sizeof(buf), "TR %s  len=%3d  lin=%3d  tmr=%4d  seq=%2d",
+                 on ? "ON " : "OFF", triangle.length_counter,
+                 triangle.linear_counter, triangle.timer_period, triangle.seq_pos);
+        draw_text(PAD_X, y, buf, on ? COL_ON : COL_OFF);
         y += LINE_H;
+        SDL_Color tri_col = {100, 200, 255, 255};
+        draw_bar(PAD_X, y, BAR_FULL_W, BAR_SLIM_H, pct, on ? tri_col : COL_DIM);
+        y += BAR_SLIM_H + 4;
     }
     {
         uint8_t vol = noise.constant_vol ? noise.envelope_vol : noise.envelope_decay;
         bool on = apu.noise_enabled && noise.length_counter > 0 && vol > 0;
-        snprintf(buf, sizeof(buf), "NO %s v=%2d l=%3d t=%4d m=%d",
+        snprintf(buf, sizeof(buf), "NO %s  vol=%2d  len=%3d  tmr=%4d  mode=%d",
                  on ? "ON " : "OFF", vol, noise.length_counter,
                  noise.timer_period, noise.mode);
         draw_text(PAD_X, y, buf, on ? COL_ON : COL_OFF);
-        draw_bar(DBG_WIN_W - PAD_X - 60, y + 1, 50, LINE_H - 2,
-                 vol / 15.0f, (SDL_Color){255, 180, 80, 255});
-        y += LINE_H + 4;
+        y += LINE_H;
+        SDL_Color noi_col = {255, 180, 80, 255};
+        draw_bar(PAD_X, y, BAR_FULL_W, BAR_SLIM_H, vol / 15.0f, on ? noi_col : COL_DIM);
+        y += BAR_SLIM_H + 4 + 6;
     }
 
-    // ── Audio
-    draw_text(PAD_X, y, "--- Audio ---", COL_HEADING);
+    // ── Audio ────────────────────────────────────────
+    draw_text(PAD_X, y, "Audio", COL_HEADING);
     y += LINE_H;
 
     uint32_t avail = ring_buffer_available();
-    snprintf(buf, sizeof(buf), "Ring %u/%d (%.0f%%)  peak=%.4f",
+    snprintf(buf, sizeof(buf), "Buf %u/%d (%.0f%%)   peak=%.4f   nonzero=%u/%u",
              avail, RING_BUFFER_SIZE,
-             100.0f * (float)avail / RING_BUFFER_SIZE, apu_dbg.peak_sample);
+             100.0f * (float)avail / (float)RING_BUFFER_SIZE,
+             apu_dbg.peak_sample,
+             apu_dbg.nonzero_samples, apu_dbg.total_samples);
     draw_text(PAD_X, y, buf, COL_LABEL);
-    draw_bar(DBG_WIN_W - PAD_X - 60, y + 1, 50, LINE_H - 2,
-             (float)avail / RING_BUFFER_SIZE, (SDL_Color){80, 180, 255, 255});
-    y += LINE_H + 4;
+    y += LINE_H;
+    SDL_Color buf_col = {80, 180, 255, 255};
+    draw_bar(PAD_X, y, BAR_FULL_W, BAR_SLIM_H,
+             (float)avail / (float)RING_BUFFER_SIZE, buf_col);
+    y += BAR_SLIM_H + 4 + 6;
 
-    // ── Controller
+    // ── Controller ───────────────────────────────────
     {
         uint8_t cs = controller_state[0];
-        static const char *btn[] = {"A","B","Sel","Sta","Up","Dn","Lt","Rt"};
-        static const uint8_t bit[] = {0x80,0x40,0x20,0x10,0x08,0x04,0x02,0x01};
+        static const char *btn_labels[] = {"A","B","Sel","Sta","Up","Dn","Lt","Rt"};
+        static const uint8_t btn_bits[] = {0x80,0x40,0x20,0x10,0x08,0x04,0x02,0x01};
+        int spacing = (DBG_WIN_W - PAD_X * 2) / 8;
         int bx = PAD_X;
         for (int i = 0; i < 8; i++) {
-            draw_text(bx, y, btn[i], (cs & bit[i]) ? COL_ON : COL_DIM);
-            bx += 40;
+            draw_text(bx, y, btn_labels[i], (cs & btn_bits[i]) ? COL_ON : COL_DIM);
+            bx += spacing;
         }
-        y += LINE_H + 4;
+        y += LINE_H + 6;
     }
 
-    // ── Cartridge
+    // ── Cartridge ────────────────────────────────────
     if (cartridge) {
-        snprintf(buf, sizeof(buf), "%uKB/%uKB  M%u  %s",
+        snprintf(buf, sizeof(buf), "PRG=%uKB  CHR=%uKB  Mapper=%u  %s",
                  cartridge->prg_size / 1024, cartridge->chr_size / 1024,
                  cartridge->mapper_id, cartridge->is_pal ? "PAL" : "NTSC");
         draw_text(PAD_X, y, buf, COL_VALUE);
     } else {
         draw_text(PAD_X, y, "(no cartridge)", COL_DIM);
     }
+    y += LINE_H + 6;
 
-    // ── Footer
-    draw_text(PAD_X, DBG_WIN_H - LINE_H - PAD_Y, "D=toggle debug", COL_DIM);
+    // ── Separator ────────────────────────────────────
+    SDL_SetRenderDrawColor(dbg_renderer, COL_SEP.r, COL_SEP.g, COL_SEP.b, 255);
+    SDL_RenderDrawLine(dbg_renderer, PAD_X, y, DBG_WIN_W - PAD_X, y);
+    y += 4;
+
+    // ── Footer ───────────────────────────────────────
+    if (show_paused) {
+        draw_text(PAD_X, y, "|| PAUSED  (Q=step)", COL_OFF);
+    } else {
+        draw_text(PAD_X, y, "> RUNNING", COL_ON);
+    }
+    y += LINE_H;
+    draw_text(PAD_X, y, "D=debug   R=pause   Q=step   ESC=quit", COL_DIM);
 }
 
 // ---------- main update -------------------------------------------------

@@ -30,6 +30,9 @@ bool debug_window_handle_event(const SDL_Event *event);
 // Append a formatted line to the scrolling log (top half of the window).
 void debug_log(const char *fmt, ...);
 
+// Set from main.c so the footer can show pause state.
+void debug_window_set_paused(bool paused);
+
 #ifdef __cplusplus
 }
 #endif

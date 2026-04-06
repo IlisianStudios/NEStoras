@@ -42,6 +42,7 @@ typedef struct{
     bool nestest_passed;
 } CPU;
 
+extern CPU cpu;
 void cpu_reset(CPU *cpu);
 void cpu_nmi(CPU *cpu);
 void cpu_irq(CPU *cpu);

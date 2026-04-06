@@ -2,6 +2,7 @@
 #include "bus.h"
 #include "instruction.h"
 #include "nestest_compare.h"
+#include "debug_window.h"
 #include <stdio.h>
 #include "apu.h"
 #include "ringbuffer.h"
@@ -9,76 +10,59 @@
 NestestLog nestest_log = {0};
 
 void log_cpu_state(const CPU *cpu, Instruction inst, uint16_t pc) {
-    // Print PC
-    printf("%04X  ", pc);
+    // Format: "C000 4C F5C5 JMP $F5C5        A:00 X:00 Y:00 P:24 SP:FD"
+    // Compact single-line format that fits in ~90 chars for the debug log.
 
-    // Print instruction bytes
-    for (uint8_t i = 0; i < inst.bytes; i++) {
-        printf("%02X ", bus_read(pc + i));
-    }
+    // Build hex bytes string (up to 3 bytes)
+    char hex[10];
+    int hlen = 0;
+    for (uint8_t i = 0; i < inst.bytes; i++)
+        hlen += snprintf(hex + hlen, sizeof(hex) - hlen, "%02X", bus_read(pc + i));
 
-    // Pad to align mnemonic
-    for (uint8_t i = inst.bytes; i < 3; i++) {
-        printf("   ");
-    }
-
-    // Format mnemonic + operand
-    char operand[32] = "";
-
-    if (inst.bytes == 1) {
-        snprintf(operand, sizeof(operand), "%s", inst.name);
-    } else if (inst.bytes == 2) {
+    // Build operand string
+    char op[32] = "";
+    if (inst.bytes == 2) {
         uint8_t val = bus_read(pc + 1);
         if (inst.addrmode == &addr_IMM)
-            snprintf(operand, sizeof(operand), "%s #$%02X", inst.name, val);
+            snprintf(op, sizeof(op), "#$%02X", val);
         else if (inst.addrmode == &addr_ZPO)
-            snprintf(operand, sizeof(operand), "%s $%02X", inst.name, val);
+            snprintf(op, sizeof(op), "$%02X", val);
         else if (inst.addrmode == &addr_ZPX)
-            snprintf(operand, sizeof(operand), "%s $%02X,X", inst.name, val);
+            snprintf(op, sizeof(op), "$%02X,X", val);
         else if (inst.addrmode == &addr_ZPY)
-            snprintf(operand, sizeof(operand), "%s $%02X,Y", inst.name, val);
-        else if (inst.addrmode == &addr_REL) {
-            // Show the resolved branch target
-            int8_t offset = (int8_t)val;
-            uint16_t target = pc + 2 + offset;
-            snprintf(operand, sizeof(operand), "%s $%04X", inst.name, target);
-        }
+            snprintf(op, sizeof(op), "$%02X,Y", val);
+        else if (inst.addrmode == &addr_REL)
+            snprintf(op, sizeof(op), "$%04X", (uint16_t)(pc + 2 + (int8_t)val));
         else if (inst.addrmode == &addr_IDX)
-            snprintf(operand, sizeof(operand), "%s ($%02X,X)", inst.name, val);
+            snprintf(op, sizeof(op), "($%02X,X)", val);
         else if (inst.addrmode == &addr_IZY)
-            snprintf(operand, sizeof(operand), "%s ($%02X),Y", inst.name, val);
+            snprintf(op, sizeof(op), "($%02X),Y", val);
         else
-            snprintf(operand, sizeof(operand), "%s $%02X", inst.name, val);
+            snprintf(op, sizeof(op), "$%02X", val);
     } else if (inst.bytes == 3) {
         uint16_t val = bus_read(pc + 1) | (bus_read(pc + 2) << 8);
         if (inst.addrmode == &addr_ABS)
-            snprintf(operand, sizeof(operand), "%s $%04X", inst.name, val);
+            snprintf(op, sizeof(op), "$%04X", val);
         else if (inst.addrmode == &addr_ABX)
-            snprintf(operand, sizeof(operand), "%s $%04X,X", inst.name, val);
+            snprintf(op, sizeof(op), "$%04X,X", val);
         else if (inst.addrmode == &addr_ABY)
-            snprintf(operand, sizeof(operand), "%s $%04X,Y", inst.name, val);
+            snprintf(op, sizeof(op), "$%04X,Y", val);
         else if (inst.addrmode == &addr_IND)
-            snprintf(operand, sizeof(operand), "%s ($%04X)", inst.name, val);
+            snprintf(op, sizeof(op), "($%04X)", val);
         else
-            snprintf(operand, sizeof(operand), "%s $%04X", inst.name, val);
+            snprintf(op, sizeof(op), "$%04X", val);
     }
 
-    printf("%-31s", operand);
+    // Assemble mnemonic + operand
+    char mnem[40];
+    if (op[0])
+        snprintf(mnem, sizeof(mnem), "%s %s", inst.name, op);
+    else
+        snprintf(mnem, sizeof(mnem), "%s", inst.name);
 
-    // Replace with Ppu numbers. they get properly computed here and the whole nettestlog agrres with it
-    uint32_t ppu_total = (uint32_t)(cpu->total_cycles * 3);
-    uint16_t ppu_scanline = (ppu_total / 341) % 262;
-    uint16_t ppu_dot = ppu_total % 341;
-
-    // Print CPU registers
-    printf("A:%02X X:%02X Y:%02X P:%02X SP:%02X PPU:%3u,%3u CYC:%llu\n",
-           cpu->a,
-           cpu->x,
-           cpu->y,
-           cpu->status,
-           cpu->sp,
-           ppu_scanline, ppu_dot,
-           (unsigned long long)cpu->total_cycles);
+    debug_log("%04X %-6s %-14s A:%02X X:%02X Y:%02X S:%02X P:%02X",
+              pc, hex, mnem,
+              cpu->a, cpu->x, cpu->y, cpu->sp, cpu->status);
 }
 
 void cpu_reset(CPU *cpu){

@@ -11,7 +11,7 @@
 #include "debug_window.h"
 
 bool running = true;
-static CPU cpu;
+CPU cpu;
 static SDL_AudioDeviceID audio_dev = 0;
 Timing timing;
 
@@ -70,7 +70,6 @@ void init(void) {
     apu_init();
     apu_debug_reset();
     init_audio();
-    debug_window_init();
 }
 
 SDL_Window* setup_window(void) {
@@ -153,10 +152,10 @@ void SDL2_loop(void) {
                 case SDLK_RIGHT:  mask = 0x01; break;  // Right
                 default: break;
             }
-            if (mask) {
-                if (pressed) controller_state[0] |= mask;
-                else         controller_state[0] &= ~mask;
-            }
+            if (mask && pressed)
+                controller_state[0] |= mask;
+                if (mask && !pressed) controller_state[0] &= ~mask;
+
         }
         if (event.type == SDL_KEYDOWN) {
             switch (event.key.keysym.sym) {
@@ -182,9 +181,11 @@ int main(int argc, char** argv) {
 
     init();
     SDL_Window* window = setup_window();
+    debug_window_init(window, &cpu.testing_mode);
 
 #ifndef NDEBUG
     debug_nestest();
+    debug_window_toggle();
 #endif
 
     if (argc > 1) {

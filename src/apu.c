@@ -3,6 +3,7 @@
 #include "cpu.h"
 #include "cartridge.h"
 #include "ringbuffer.h"
+#include "debug_window.h"
 #include <string.h>
 
 APU apu;
@@ -95,24 +96,24 @@ void apu_debug_print(CPU *cpu) {
     uint8_t p2v = pulse2.constant_vol ? pulse2.envelope_vol : pulse2.envelope_decay;
     uint8_t nv  = noise.constant_vol  ? noise.envelope_vol  : noise.envelope_decay;
 
-    printf("[APU] samples: %u/%u nonzero (peak=%.4f) | ring=%u/%d\n",
+    debug_log("[APU] %u/%u nonzero peak=%.4f ring=%u/%d",
            apu_dbg.nonzero_samples, apu_dbg.total_samples, apu_dbg.peak_sample,
            ring_buffer_available(), RING_BUFFER_SIZE);
 
-    printf("  $4015=$%02X (wr=%u) | en: p1=%d p2=%d tri=%d noi=%d\n",
+    debug_log("  $4015=$%02X wr=%u en: p1=%d p2=%d tri=%d noi=%d",
            apu_dbg.last_status_value, apu_dbg.status_write_count,
            apu.pulse1_enabled, apu.pulse2_enabled,
            apu.triangle_enabled, apu.noise_enabled);
 
-    printf("  p1: vol=%d len=%d tmr=%d duty=%d | p2: vol=%d len=%d tmr=%d duty=%d\n",
-           p1v, pulse1.length_counter, pulse1.timer_period, pulse1.duty,
-           p2v, pulse2.length_counter, pulse2.timer_period, pulse2.duty);
+    debug_log("  p1:v=%d l=%d t=%d | p2:v=%d l=%d t=%d",
+           p1v, pulse1.length_counter, pulse1.timer_period,
+           p2v, pulse2.length_counter, pulse2.timer_period);
 
-    printf("  tri: len=%d lin=%d tmr=%d | noi: vol=%d len=%d lfsr=$%04X mode=%d\n",
-           triangle.length_counter, triangle.linear_counter, triangle.timer_period,
-           nv, noise.length_counter, noise.lfsr, noise.mode);
+    debug_log("  tri:l=%d lin=%d | noi:v=%d l=%d lfsr=$%04X",
+           triangle.length_counter, triangle.linear_counter,
+           nv, noise.length_counter, noise.lfsr);
 
-    printf("  NMIs=%u apu_wr=%u PC=$%04X cyc=%llu\n",
+    debug_log("  NMIs=%u wr=%u PC=$%04X cyc=%llu",
            apu_dbg.nmi_count, apu_dbg.apu_write_count,
            cpu->pc, (unsigned long long)cpu->total_cycles);
 }

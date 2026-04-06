@@ -13,9 +13,9 @@
 // ---------- constants ---------------------------------------------------
 
 #define DBG_WIN_W   360
-#define DBG_WIN_H   560
-#define FONT_SIZE   14
-#define LINE_H      18        // vertical spacing per line
+#define DBG_WIN_H   680
+#define FONT_SIZE   10
+#define LINE_H      13        // vertical spacing per line
 #define PAD_X       12
 #define PAD_Y       10
 #define MAX_LINES   64

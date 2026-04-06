@@ -89,18 +89,20 @@ typedef struct {
 extern Noise noise;
 
 typedef struct {
-    bool     irq_enable;       // DMC interrupt enable
-    bool     loop;
-    uint16_t timer_period;   //
-    uint16_t sample_address;   // sample address = 0xC000 + (addr * 64)
-    uint16_t sample_length;    // sample length = (len * 16) + 1 bytes
-    uint16_t current_address;
-    uint16_t bytes_remaining;
-    uint8_t  shift_register;
-    uint8_t  bits_remaining;
-    bool     silence;          // if true, output is silent regardless of shift register
-    uint16_t direct_load;
-    uint8_t sample_buffer;
+    bool     irq_enable;        // bit 7 of $4010
+    bool     loop;              // bit 6 of $4010
+    uint16_t timer_period;      // from rate table
+    uint16_t timer_current;     // countdown
+    uint16_t sample_address;    // $C000 + (reg * 64)
+    uint16_t sample_length;     // (reg * 16) + 1 bytes
+    uint16_t current_address;   // fetch address, wraps $8000–$FFFF
+    uint16_t bytes_remaining;   // bytes left in current sample
+    uint8_t  shift_register;    // 8-bit output shift register
+    uint8_t  bits_remaining;    // bits left to shift (0 triggers reload)
+    bool     silence;           // output unit is silent
+    uint8_t  sample_buffer;     // byte fetched from memory, waiting to be shifted
+    bool     sample_buffer_full;// is sample_buffer valid?
+    uint8_t  output_level;      // 7-bit DAC output (0–127)
 } DMC;
 
 extern DMC dmc;
@@ -118,6 +120,7 @@ typedef struct {
     bool     triangle_enabled;
     bool     noise_enabled;
     bool     dmc_enabled;
+    bool     dmc_irq;           // DMC interrupt pending
 
     // --- downsampler ---
     double   sample_accumulator;

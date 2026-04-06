@@ -54,12 +54,15 @@ void apu_init(void) {
     memset(&pulse2,   0, sizeof(pulse2));
     memset(&triangle, 0, sizeof(triangle));
     memset(&noise,    0, sizeof(noise));
+    memset(&dmc,      0, sizeof(dmc));
     memset(&apu,      0, sizeof(apu));
-    noise.lfsr  = 1;
-    nmi_cycles  = 0;
+    noise.lfsr         = 1;
+    dmc.bits_remaining = 8;    // shift register starts empty but well-defined
+    dmc.silence        = true;
+    nmi_cycles         = 0;
     sample_accumulator = 0.0;
-    otherCycle  = false;
-    ppu_nmi_enable = false;
+    otherCycle         = false;
+    ppu_nmi_enable     = false;
 
     // Region-specific timing
     bool pal = (cartridge && cartridge->is_pal);
@@ -229,11 +232,41 @@ static uint8_t pulse_output(Pulse *p, bool enabled) {
     if (!enabled) return 0;
     if (p->length_counter == 0) return 0;
     if (p->timer_period < 8) return 0;
+    // Sweep target period overflow mute: always computed, regardless of sweep enable.
+    // Negate never overflows; only the addition case can exceed $7FF.
+    if (!p->sweep_negate) {
+        uint16_t target = p->timer_period + (p->timer_period >> p->sweep_shift);
+        if (target > 0x7FF) return 0;
+    }
     if (!DUTY_TABLE[p->duty][p->seq_pos]) return 0;
-    // Compute volume on-the-fly — the cached p->volume can be stale
-    // between $4000/$4004 writes and the next quarter-frame clock.
     uint8_t vol = p->constant_vol ? p->envelope_vol : p->envelope_decay;
     return vol;
+}
+
+// ---------- DMC memory reader -------------------------------------------
+
+static void dmc_fetch_byte(CPU *cpu) {
+    if (dmc.sample_buffer_full || dmc.bytes_remaining == 0) return;
+
+    dmc.sample_buffer      = bus_read(dmc.current_address);
+    dmc.sample_buffer_full = true;
+
+    // Address wraps $8000–$FFFF
+    if (dmc.current_address == 0xFFFF)
+        dmc.current_address = 0x8000;
+    else
+        dmc.current_address++;
+
+    dmc.bytes_remaining--;
+    if (dmc.bytes_remaining == 0) {
+        if (dmc.loop) {
+            dmc.current_address = dmc.sample_address;
+            dmc.bytes_remaining = dmc.sample_length;
+        } else if (dmc.irq_enable) {
+            apu.dmc_irq = true;
+            cpu_irq(cpu);
+        }
+    }
 }
 
 static void clock_pulse_timer(Pulse *p) {
@@ -272,6 +305,38 @@ void apu_step(CPU *cpu) {
             noise.lfsr = (noise.lfsr >> 1) | (feedback << 14);
         } else {
             noise.timer_current--;
+        }
+
+        // DMC timer + output unit (clocked at APU rate)
+        if (apu.dmc_enabled || dmc.bits_remaining > 0) {
+            if (dmc.timer_current == 0) {
+                dmc.timer_current = dmc.timer_period;
+
+                // Clock output unit: adjust level by one bit
+                if (!dmc.silence) {
+                    if (dmc.shift_register & 1) {
+                        if (dmc.output_level <= 125) dmc.output_level += 2;
+                    } else {
+                        if (dmc.output_level >= 2)  dmc.output_level -= 2;
+                    }
+                }
+                dmc.shift_register >>= 1;
+                dmc.bits_remaining--;
+
+                if (dmc.bits_remaining == 0) {
+                    dmc.bits_remaining = 8;
+                    if (dmc.sample_buffer_full) {
+                        dmc.shift_register     = dmc.sample_buffer;
+                        dmc.sample_buffer_full = false;
+                        dmc.silence            = false;
+                        dmc_fetch_byte(cpu);   // immediately try to fill buffer
+                    } else {
+                        dmc.silence = true;
+                    }
+                }
+            } else {
+                dmc.timer_current--;
+            }
         }
     }
 
@@ -374,7 +439,9 @@ float apu_mix(void) {
     }
 
     float tnd_out = 0.0f;
-    float tnd_sum = (float)tri / 8227.0f + (float)noi / 12241.0f;
+    float tnd_sum = (float)tri / 8227.0f
+                  + (float)noi / 12241.0f
+                  + (float)dmc.output_level / 22638.0f;
     if (tnd_sum > 0.0f)
         tnd_out = 159.79f / (1.0f / tnd_sum + 100.0f);
 
@@ -388,22 +455,11 @@ uint8_t apu_read(uint16_t addr) {
     if (pulse2.length_counter > 0)   status |= 0x02;
     if (triangle.length_counter > 0) status |= 0x04;
     if (noise.length_counter > 0)    status |= 0x08;
+    if (dmc.bytes_remaining > 0)     status |= 0x10;
     if (apu.frame_irq)               status |= 0x40;
-    if (dmc.bytes_remaining > 0) {
-        dmc.sample_buffer = bus_read(addr);
-        addr = (addr + 1) | 0x8000;
-        dmc.bytes_remaining--;
-        if (dmc.bytes_remaining == 0) {
-            if (dmc.loop) {
-                dmc.current_address = dmc.sample_address;
-                dmc.bytes_remaining = dmc.sample_length;
-            }
-            if (dmc.irq_enable) {
-                cpu_irq(&cpu);
-            }
-        }
-    }
-    apu.frame_irq = false;
+    if (apu.dmc_irq)                 status |= 0x80;
+    apu.frame_irq = false;           // reading $4015 clears the frame IRQ flag
+    // DMC IRQ is NOT cleared by reading; cleared by writing $4015 or disabling in $4010
     return status;
 }
 
@@ -433,11 +489,22 @@ void apu_write(uint16_t addr, uint8_t data) {
             apu.pulse2_enabled   = (data >> 1) & 1;
             apu.triangle_enabled = (data >> 2) & 1;
             apu.noise_enabled    = (data >> 3) & 1;
-            apu.dmc_enabled      = (data >> 4) & 1;
             if (!apu.pulse1_enabled)   pulse1.length_counter   = 0;
             if (!apu.pulse2_enabled)   pulse2.length_counter   = 0;
             if (!apu.triangle_enabled) triangle.length_counter = 0;
             if (!apu.noise_enabled)    noise.length_counter    = 0;
+            // DMC: writing $4015 always clears the DMC IRQ flag
+            apu.dmc_irq = false;
+            if (data & 0x10) {
+                apu.dmc_enabled = true;
+                if (dmc.bytes_remaining == 0) {
+                    dmc.current_address = dmc.sample_address;
+                    dmc.bytes_remaining = dmc.sample_length;
+                }
+            } else {
+                apu.dmc_enabled = false;
+                dmc.bytes_remaining = 0;
+            }
             break;
         case 0x4000:
             pulse1.duty = (data >> 6) & 0x03;
@@ -512,12 +579,13 @@ void apu_write(uint16_t addr, uint8_t data) {
             noise.envelope_start  = true;
             break;
         case 0x4010:
-            dmc.irq_enable = (data >> 6) & 1;
-            dmc.loop = (data & 0x40) & 1;
+            dmc.irq_enable = (data >> 7) & 1;
+            if (!dmc.irq_enable) apu.dmc_irq = false;
+            dmc.loop         = (data >> 6) & 1;
             dmc.timer_period = dmc_rates[data & 0x0F];
             break;
         case 0x4011:
-            dmc.direct_load = data & 0x7F;
+            dmc.output_level = data & 0x7F;
             break;
         case 0x4012:
             dmc.sample_address = 0xC000 + (data << 6);

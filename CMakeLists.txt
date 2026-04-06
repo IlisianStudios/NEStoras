@@ -6,6 +6,7 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
 find_package(SDL2 REQUIRED CONFIG)
+find_package(SDL2_ttf REQUIRED CONFIG)
 
 add_executable(NEStoras
     src/main.c
@@ -20,6 +21,8 @@ add_executable(NEStoras
         include/timing.h
         src/ringbuffer.c
         include/ringbuffer.h
+        src/debug_window.c
+        include/debug_window.h
 )
 
 target_include_directories(NEStoras PRIVATE
@@ -27,7 +30,7 @@ target_include_directories(NEStoras PRIVATE
     ${SDL2_INCLUDE_DIRS}
 )
 
-target_link_libraries(NEStoras PRIVATE SDL2::SDL2)
+target_link_libraries(NEStoras PRIVATE SDL2::SDL2 SDL2_ttf::SDL2_ttf)
 
 target_compile_options(NEStoras PRIVATE
     $<$<C_COMPILER_ID:AppleClang,Clang,GNU>:-Wall -Wextra -Wpedantic>

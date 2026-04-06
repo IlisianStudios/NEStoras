@@ -8,6 +8,7 @@
 #include "instruction.h"
 #include "nestest_compare.h"
 #include "ringbuffer.h"
+#include "debug_window.h"
 
 bool running = true;
 static CPU cpu;
@@ -69,6 +70,7 @@ void init(void) {
     apu_init();
     apu_debug_reset();
     init_audio();
+    debug_window_init();
 }
 
 SDL_Window* setup_window(void) {
@@ -130,6 +132,10 @@ void handle_event_type(const SDL_Event *event) {
 void SDL2_loop(void) {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
+        // Let the debug window handle its own events first
+        if (debug_window_handle_event(&event))
+            continue;
+
         // NES controller bit layout: A B Select Start Up Down Left Right
         //                             7 6   5      4   3    2     1    0
         if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
@@ -158,6 +164,9 @@ void SDL2_loop(void) {
                     try_free_cartridge();
                     nestest_close(&nestest_log);
                     running = false;
+                    break;
+                case SDLK_d:
+                    debug_window_toggle();
                     break;
                 default:
                     break;
@@ -212,6 +221,9 @@ int main(int argc, char** argv) {
         // Testing-mode diagnostics (only prints when apu_dbg.enabled is set)
         apu_debug_print(&cpu);
 
+        // Update debug window (self-throttled, no-op when hidden)
+        debug_window_update(&cpu);
+
         if (cpu.nestest_passed) {
             cpu.nestest_passed = false;
             try_free_cartridge();
@@ -220,6 +232,7 @@ int main(int argc, char** argv) {
     }
 
     try_free_cartridge();
+    debug_window_destroy();
     if (audio_dev) SDL_CloseAudioDevice(audio_dev);
     SDL_DestroyWindow(window);
     SDL_Quit();

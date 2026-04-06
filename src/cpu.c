@@ -11,15 +11,12 @@ NestestLog nestest_log = {0};
 
 void log_cpu_state(const CPU *cpu, Instruction inst, uint16_t pc) {
     // Format: "C000 4C F5C5 JMP $F5C5        A:00 X:00 Y:00 P:24 SP:FD"
-    // Compact single-line format that fits in ~90 chars for the debug log.
 
-    // Build hex bytes string (up to 3 bytes)
     char hex[10];
     int hlen = 0;
     for (uint8_t i = 0; i < inst.bytes; i++)
         hlen += snprintf(hex + hlen, sizeof(hex) - hlen, "%02X", bus_read(pc + i));
 
-    // Build operand string
     char op[32] = "";
     if (inst.bytes == 2) {
         uint8_t val = bus_read(pc + 1);
@@ -117,8 +114,6 @@ void cpu_irq(CPU *cpu){
 }
 
 void audio_callback(void *userdata, Uint8 *stream, int len) {
-    // SDL2 requires you to initialize the buffer.
-    // Fill with 0 (silence) if no data is ready.
     int16_t *out = (int16_t *)stream;
     int num_samples = len / sizeof(int16_t);
     for (int i = 0; i < num_samples; i++) {
@@ -132,8 +127,6 @@ void run_cycles(CPU *cpu, uint64_t cycles) {
     while (ran < cycles) {
         cpu_step(cpu);
 
-        // cpu.cycles is how many cycles THIS instruction took (set inside cpu_step).
-        // Tick the APU once per CPU cycle.
         for (uint8_t i = 0; i < cpu->cycles; i++) {
             apu_step(cpu);
         }

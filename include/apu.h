@@ -102,9 +102,6 @@ typedef struct {
     bool     noise_enabled;
     bool     dmc_enabled;
 
-    // --- pulse 1, pulse 2, triangle, noise structs go here ---
-    // (add as you implement each one)
-
     // --- downsampler ---
     double   sample_accumulator;
 } APU;
@@ -118,10 +115,8 @@ uint8_t apu_read(uint16_t addr); // $4015 only
 void apu_write(uint16_t addr, uint8_t data); // $4000-$4017
 uint32_t apu_get_frame_cycles(void);
 
-// Per-channel waveform ring buffer — filled every sample tick, read by debug window
 #define APU_WAVE_LEN 256
 
-// APU debug diagnostics — counters are always tracked, output gated by `enabled`
 typedef struct {
     bool     enabled;            // set true when cpu.testing_mode is on
     uint32_t nmi_count;
@@ -135,7 +130,6 @@ typedef struct {
     uint32_t diag_interval;      // frames between debug prints
     uint32_t diag_counter;       // counts up to diag_interval
 
-    // Waveform ring buffers — values normalised to [0, 1]
     float wave_p1[APU_WAVE_LEN];
     float wave_p2[APU_WAVE_LEN];
     float wave_tri[APU_WAVE_LEN];

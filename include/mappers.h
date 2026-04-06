@@ -1,7 +1,3 @@
-//
-// Created by Pandora on 3/4/26.
-//
-
 #pragma once
 #ifndef NESTORAS_MAPPERS_H
 #define NESTORAS_MAPPERS_H

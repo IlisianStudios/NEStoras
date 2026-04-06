@@ -1,3 +1,4 @@
+
 #include <stdio.h>
 #include <stdbool.h>
 #include <SDL2/SDL.h>
@@ -221,7 +222,6 @@ int main(int argc, char** argv) {
         SDL2_loop();
 
         if (cartridge == NULL) {
-            // Still update debug window while idle (keeps log visible)
             debug_window_set_paused(cpu_paused);
             debug_window_update(&cpu);
             SDL_Delay(10);
@@ -236,7 +236,6 @@ int main(int argc, char** argv) {
         }
 
         if (cpu_paused && !cpu_step_one) {
-            // Still update debug window while paused
             debug_window_set_paused(cpu_paused);
             debug_window_update(&cpu);
             SDL_Delay(1);
@@ -244,7 +243,6 @@ int main(int argc, char** argv) {
         }
 
         if (cpu_step_one) {
-            // Execute exactly one CPU instruction
             cpu_step_one = false;
             run_cycles(&cpu, 1);
         } else if (cycles_to_run == UINT32_MAX) {
@@ -253,10 +251,8 @@ int main(int argc, char** argv) {
             run_cycles(&cpu, cycles_to_run);
         }
 
-        // Testing-mode diagnostics (only prints when apu_dbg.enabled is set)
         apu_debug_print(&cpu);
 
-        // Update debug window (self-throttled, no-op when hidden)
         debug_window_set_paused(cpu_paused);
         debug_window_update(&cpu);
 
@@ -264,7 +260,6 @@ int main(int argc, char** argv) {
             cpu.nestest_passed = false;
             debug_log("[NESTEST] completed — drop a ROM to continue");
             try_free_cartridge();
-            // testing_mode and apu_dbg.enabled stay on if debug window is open
         }
 
     }

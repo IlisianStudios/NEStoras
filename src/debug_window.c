@@ -11,8 +11,6 @@
 #include <stdarg.h>
 #include <string.h>
 
-// ---------- layout constants --------------------------------------------
-
 #define DBG_WIN_W    520
 #define DBG_WIN_H    960
 #define FONT_SIZE    14
@@ -20,7 +18,6 @@
 #define PAD_X        12
 #define PAD_Y        10
 
-// Text log
 #define LOG_MAX_LINES 128
 #define LOG_LINE_LEN  96
 
@@ -66,13 +63,9 @@ static const SDL_Color COL_DIM     = { 100, 100, 100, 255 };
 static const SDL_Color COL_LOG     = { 200, 200, 200, 255 };
 static const SDL_Color COL_SEP     = {  60,  60,  80, 255 };
 
-// ---------- text log ring buffer ----------------------------------------
-
 static char  log_lines[LOG_MAX_LINES][LOG_LINE_LEN];
 static int   log_head  = 0;   // next write index
 static int   log_count = 0;   // total stored (capped at LOG_MAX_LINES)
-
-// ---------- window state ------------------------------------------------
 
 static SDL_Window   *main_win     = NULL;
 static SDL_Window   *dbg_win      = NULL;
@@ -144,8 +137,6 @@ static void position_beside_main(void) {
     if (dx < 0) dx = 0;
     SDL_SetWindowPosition(dbg_win, dx, my);
 }
-
-// ---------- public API --------------------------------------------------
 
 void debug_log(const char *fmt, ...) {
     va_list args;
@@ -243,8 +234,6 @@ bool debug_window_handle_event(const SDL_Event *event) {
     return false;
 }
 
-// ---------- waveform snapshot + rendering --------------------------------
-
 static void snapshot_waveforms(void) {
     int pos = apu_dbg.wave_pos;
     for (int i = 0; i < APU_WAVE_LEN; i++) {
@@ -302,8 +291,6 @@ static void render_waveforms(void) {
     }
 }
 
-// ---------- rendering: top half (scrolling log) -------------------------
-
 static void render_log(void) {
     draw_text(PAD_X, PAD_Y, "--- Log ---", COL_HEADING);
 
@@ -318,14 +305,10 @@ static void render_log(void) {
     }
 }
 
-// ---------- rendering: separator ----------------------------------------
-
 static void render_separator(void) {
     SDL_SetRenderDrawColor(dbg_renderer, COL_SEP.r, COL_SEP.g, COL_SEP.b, 255);
     SDL_RenderDrawLine(dbg_renderer, PAD_X, LOG_AREA_H, DBG_WIN_W - PAD_X, LOG_AREA_H);
 }
-
-// ---------- rendering: bottom half (live state) -------------------------
 
 static void render_state(const CPU *cpu) {
     int y = STATE_Y;
@@ -466,8 +449,6 @@ static void render_state(const CPU *cpu) {
     y += LINE_H;
     draw_text(PAD_X, y, "D=debug   R=pause   Q=step   ESC=quit", COL_DIM);
 }
-
-// ---------- main update -------------------------------------------------
 
 void debug_window_update(const CPU *cpu) {
     if (!dbg_visible || !dbg_renderer || !cpu) return;

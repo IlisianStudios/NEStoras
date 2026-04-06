@@ -4,7 +4,6 @@
 #include "cartridge.h"
 #include "ringbuffer.h"
 #include "debug_window.h"
-#include <string.h>
 
 APU apu;
 
@@ -307,7 +306,6 @@ void apu_step(CPU *cpu) {
                 apu.frame_irq = true;
             }
 
-            // Reset counter after final step
             if (i == steps - 1) {
                 apu.frame_cycles = 0;
             }
@@ -330,7 +328,8 @@ void apu_step(CPU *cpu) {
         if (absmix > apu_dbg.peak_sample) apu_dbg.peak_sample = absmix;
         ring_buffer_push(mix);
 
-        // Waveform capture — always on, negligible cost
+        if (!apu_dbg.enabled) return;
+
         int wp = apu_dbg.wave_pos;
         apu_dbg.wave_p1[wp]  = (float)pulse_output(&pulse1, apu.pulse1_enabled) / 15.0f;
         apu_dbg.wave_p2[wp]  = (float)pulse_output(&pulse2, apu.pulse2_enabled) / 15.0f;

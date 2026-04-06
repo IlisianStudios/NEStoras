@@ -1,6 +1,3 @@
-//
-// Created by Pandora on 4/4/26.
-//
 #pragma once
 
 #ifndef NESTORAS_NESTEST_COMPARE_H
@@ -10,7 +7,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
-#include <stdlib.h>
 #include "cpu.h"
 #include "instruction.h"
 
@@ -42,7 +38,7 @@ static bool parse_nestest_line(const char *line, NestestLine *out) {
     unsigned int ppu_dot;
 
     if (sscanf(line, "%4X", &pc) != 1) return false;
-    out->pc = (uint16_t)pc;
+    out->pc = (uint16_t) pc;
 
     // mnemonic starts at col 16, length up to 32 chars
     char mn_buf[33] = {0};
@@ -57,22 +53,23 @@ static bool parse_nestest_line(const char *line, NestestLine *out) {
     out->mnemonic[sizeof(out->mnemonic) - 1] = '\0';
 
     if (sscanf(line + 48, "A:%2X X:%2X Y:%2X P:%2X SP:%2X PPU:%u,%u CYC:%u",
-       &a, &x, &y, &p, &sp, &ppu_scanline, &ppu_dot, &cyc) != 8) return false;
+               &a, &x, &y, &p, &sp, &ppu_scanline, &ppu_dot, &cyc) != 8)
+        return false;
 
-    out->a   = (uint8_t)a;
-    out->x   = (uint8_t)x;
-    out->y   = (uint8_t)y;
-    out->p   = (uint8_t)p;
-    out->sp  = (uint8_t)sp;
+    out->a = (uint8_t) a;
+    out->x = (uint8_t) x;
+    out->y = (uint8_t) y;
+    out->p = (uint8_t) p;
+    out->sp = (uint8_t) sp;
     out->cyc = cyc;
-    out->ppu_scanline = (uint16_t)ppu_scanline;
-    out->ppu_dot = (uint16_t)ppu_dot;
+    out->ppu_scanline = (uint16_t) ppu_scanline;
+    out->ppu_dot = (uint16_t) ppu_dot;
 
     return true;
 }
 
 typedef struct {
-    FILE    *file;
+    FILE *file;
     uint32_t line_num;
 } NestestLog;
 
@@ -110,28 +107,28 @@ static bool nestest_compare(NestestLog *log, const CPU *cpu, const Instruction *
     bool ok = true;
 
     // Compute PPU dot/scanline from CPU total_cycles (3 PPU dots per CPU cycle, 341 dots per scanline)
-    uint32_t ppu_total = (uint32_t)(cpu->total_cycles * 3);
+    uint32_t ppu_total = (uint32_t) (cpu->total_cycles * 3);
     uint16_t emu_ppu_scanline = (ppu_total / 341) % 262;
     uint16_t emu_ppu_dot = ppu_total % 341;
 
-    #define CHECK(field, fmt, got, exp) \
+#define CHECK(field, fmt, got, exp) \
         if ((got) != (exp)) { \
             printf("[NESTEST] line %u " field " mismatch: got " fmt " expected " fmt "\n", \
                    log->line_num, (got), (exp)); \
             ok = false; \
         }
 
-    CHECK("PC",  "%04X", pc,        ref.pc)
-    CHECK("A",   "%02X", cpu->a,    ref.a)
-    CHECK("X",   "%02X", cpu->x,    ref.x)
-    CHECK("Y",   "%02X", cpu->y,    ref.y)
-    CHECK("P",   "%02X", cpu->status, ref.p)
-    CHECK("SP",  "%02X", cpu->sp,   ref.sp)
-    CHECK("CYC", "%u",   (uint32_t)cpu->total_cycles, ref.cyc)
+    CHECK("PC", "%04X", pc, ref.pc)
+    CHECK("A", "%02X", cpu->a, ref.a)
+    CHECK("X", "%02X", cpu->x, ref.x)
+    CHECK("Y", "%02X", cpu->y, ref.y)
+    CHECK("P", "%02X", cpu->status, ref.p)
+    CHECK("SP", "%02X", cpu->sp, ref.sp)
+    CHECK("CYC", "%u", (uint32_t)cpu->total_cycles, ref.cyc)
     CHECK("PPU scanline", "%u", (uint32_t)emu_ppu_scanline, (uint32_t)ref.ppu_scanline)
     CHECK("PPU dot", "%u", (uint32_t)emu_ppu_dot, (uint32_t)ref.ppu_dot)
 
-    #undef CHECK
+#undef CHECK
 
     if (!ok) {
         printf("[NESTEST] reference: %s\n", line);
@@ -139,7 +136,7 @@ static bool nestest_compare(NestestLog *log, const CPU *cpu, const Instruction *
                pc, inst->name,
                cpu->a, cpu->x, cpu->y, cpu->status, cpu->sp,
                emu_ppu_scanline, emu_ppu_dot,
-               (unsigned long long)cpu->total_cycles);
+               (unsigned long long) cpu->total_cycles);
         return false;
     }
 

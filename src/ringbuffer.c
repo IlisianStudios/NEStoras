@@ -1,6 +1,7 @@
 #include "ringbuffer.h"
 
 #include <string.h>
+#include <SDL2/SDL.h>
 
 RingBuffer ring;
 
@@ -13,7 +14,11 @@ uint32_t ring_buffer_free_space(void) {
 }
 
 void ring_buffer_push(float sample) {
-    if (ring_buffer_free_space() == 0) return;
+    // Block instead of drop: the audio callback consumes at 44100 Hz,
+    // so this back-pressure naturally paces the emulator to audio rate.
+    while (ring_buffer_free_space() == 0) {
+        SDL_Delay(1);
+    }
 
     if (sample >  1.0f) sample =  1.0f;
     if (sample < -1.0f) sample = -1.0f;

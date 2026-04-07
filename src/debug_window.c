@@ -77,12 +77,9 @@ static bool         *testing_mode_ptr = NULL;  // points to cpu.testing_mode
 
 static uint32_t      last_draw_tick = 0;
 static const uint32_t DRAW_INTERVAL_MS = 16;   // ~60 fps
-static uint32_t      last_wave_tick = 0;
-static const uint32_t WAVE_UPDATE_MS = 400;
 static bool          show_paused = false;
 
-// Waveform snapshots (copied from apu_dbg every 400 ms)
-static float wave_snap[WAVE_COUNT][APU_WAVE_LEN];
+// No snapshot buffer needed — render_waveforms reads directly from apu_dbg scope buffers.
 
 // ---------- font search -------------------------------------------------
 
@@ -234,36 +231,21 @@ bool debug_window_handle_event(const SDL_Event *event) {
     return false;
 }
 
-static void snapshot_waveforms(void) {
-    int pos = apu_dbg.wave_pos;
-    for (int i = 0; i < APU_WAVE_LEN; i++) {
-        int s = (pos + i) % APU_WAVE_LEN;
-        wave_snap[0][i] = apu_dbg.wave_p1[s];
-        wave_snap[1][i] = apu_dbg.wave_p2[s];
-        wave_snap[2][i] = apu_dbg.wave_tri[s];
-        wave_snap[3][i] = apu_dbg.wave_noi[s];
-        wave_snap[4][i] = apu_dbg.wave_dmc[s];
-        wave_snap[5][i] = apu_dbg.wave_mix[s];
-    }
-}
-
-static void draw_waveform(int x, int y, int w, int h,
-                          const float *samples, SDL_Color col) {
-    // Background + midline
+// Draw one channel's scrolling scope directly from apu_dbg's circular buffer.
+// scope_pos is the next-write column (oldest data is at scope_pos, newest just before it).
+static void draw_scope(int x, int y, int w, int h,
+                       const float *scope, int scope_pos, SDL_Color col) {
     SDL_SetRenderDrawColor(dbg_renderer, 28, 28, 40, 255);
     SDL_Rect bg = { x, y, w, h };
     SDL_RenderFillRect(dbg_renderer, &bg);
-    SDL_SetRenderDrawColor(dbg_renderer, 55, 55, 75, 255);
-    SDL_RenderDrawLine(dbg_renderer, x, y + h / 2, x + w - 1, y + h / 2);
 
-    // Connected line graph
     SDL_SetRenderDrawColor(dbg_renderer, col.r, col.g, col.b, col.a);
-    int px0 = x, py0 = y + h / 2;
-    for (int i = 0; i < APU_WAVE_LEN; i++) {
-        float sv = samples[i];
+    int px0 = x, py0 = y + h - 1;
+    for (int i = 0; i < APU_SCOPE_W; i++) {
+        float sv = scope[(scope_pos + i) & (APU_SCOPE_W - 1)];
         if (sv > 1.0f) sv = 1.0f;
         if (sv < 0.0f) sv = 0.0f;
-        int px = x + (int)((float)i / (float)(APU_WAVE_LEN - 1) * (float)(w - 1));
+        int px = x + (int)((long long)i * (w - 1) / (APU_SCOPE_W - 1));
         int py = y + h - 1 - (int)(sv * (float)(h - 1));
         if (i > 0)
             SDL_RenderDrawLine(dbg_renderer, px0, py0, px, py);
@@ -272,7 +254,7 @@ static void draw_waveform(int x, int y, int w, int h,
 }
 
 static void render_waveforms(void) {
-    static const char *labels[]  = { "P1", "P2", "TR", "NO", "DM", "MX" };
+    static const char *labels[] = { "P1", "P2", "TR", "NO", "DM", "MX" };
     static const SDL_Color cols[] = {
         {  80, 255, 100, 255 },  // P1: green
         { 100, 200, 255, 255 },  // P2: cyan
@@ -281,14 +263,18 @@ static void render_waveforms(void) {
         { 255, 140,  60, 255 },  // DM: orange
         { 220, 220, 220, 255 },  // MX: white
     };
+    const float *scopes[WAVE_COUNT] = {
+        apu_dbg.scope_p1,  apu_dbg.scope_p2,  apu_dbg.scope_tri,
+        apu_dbg.scope_noi, apu_dbg.scope_dmc, apu_dbg.scope_mix,
+    };
 
     draw_text(PAD_X, WAVE_Y, "Waveforms", COL_HEADING);
 
     int y = WAVE_Y + LINE_H + 4;
     for (int ch = 0; ch < WAVE_COUNT; ch++) {
         draw_text(PAD_X, y + (WAVE_H - LINE_H) / 2, labels[ch], cols[ch]);
-        draw_waveform(PAD_X + WAVE_LABEL_W, y, WAVE_GRAPH_W, WAVE_H,
-                      wave_snap[ch], cols[ch]);
+        draw_scope(PAD_X + WAVE_LABEL_W, y, WAVE_GRAPH_W, WAVE_H,
+                   scopes[ch], apu_dbg.scope_pos, cols[ch]);
         y += WAVE_H + WAVE_GAP;
     }
 }
@@ -462,12 +448,6 @@ void debug_window_update(const CPU *cpu) {
     uint32_t now = SDL_GetTicks();
     if (now - last_draw_tick < DRAW_INTERVAL_MS) return;
     last_draw_tick = now;
-
-    // Snapshot waveforms at 400 ms intervals
-    if (now - last_wave_tick >= WAVE_UPDATE_MS) {
-        last_wave_tick = now;
-        snapshot_waveforms();
-    }
 
     SDL_SetRenderDrawColor(dbg_renderer, COL_BG.r, COL_BG.g, COL_BG.b, 255);
     SDL_RenderClear(dbg_renderer);

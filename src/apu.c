@@ -413,21 +413,37 @@ void apu_step(CPU *cpu) {
 
         if (!apu_dbg.enabled) return;
 
-        int wp = apu_dbg.wave_pos;
-        apu_dbg.wave_p1[wp]  = (float)pulse_output(&pulse1, apu.pulse1_enabled) / 15.0f;
-        apu_dbg.wave_p2[wp]  = (float)pulse_output(&pulse2, apu.pulse2_enabled) / 15.0f;
-        apu_dbg.wave_tri[wp] = (apu.triangle_enabled
-                                && triangle.length_counter > 0
-                                && triangle.linear_counter > 0)
-                               ? TRIANGLE_TABLE[triangle.seq_pos] / 15.0f : 0.0f;
+        // Per-channel instantaneous values
         uint8_t nvol = noise.constant_vol ? noise.envelope_vol : noise.envelope_decay;
-        apu_dbg.wave_noi[wp] = (apu.noise_enabled
-                                && noise.length_counter > 0
-                                && (noise.lfsr & 1) == 0)
-                               ? nvol / 15.0f : 0.0f;
-        apu_dbg.wave_dmc[wp] = apu.dmc_enabled ? (float)dmc.output_level / 127.0f : 0.0f;
-        apu_dbg.wave_mix[wp] = mix * 0.5f;   // mix is 2× boosted; scale back to [0,1]
-        apu_dbg.wave_pos = (wp + 1) % APU_WAVE_LEN;
+        float ch[6];
+        ch[0] = (float)pulse_output(&pulse1, apu.pulse1_enabled) / 15.0f;
+        ch[1] = (float)pulse_output(&pulse2, apu.pulse2_enabled) / 15.0f;
+        ch[2] = (apu.triangle_enabled && triangle.length_counter > 0
+                 && triangle.linear_counter > 0)
+                ? TRIANGLE_TABLE[triangle.seq_pos] / 15.0f : 0.0f;
+        ch[3] = (apu.noise_enabled && noise.length_counter > 0
+                 && (noise.lfsr & 1) == 0)
+                ? nvol / 15.0f : 0.0f;
+        ch[4] = apu.dmc_enabled ? (float)dmc.output_level / 127.0f : 0.0f;
+        ch[5] = mix * 0.5f;   // mix is 2× boosted; scale back to [0,1]
+
+        // Peak-hold accumulation into the current scope column
+        float *acc = apu_dbg.scope_acc;
+        for (int c = 0; c < 6; c++) {
+            if (ch[c] > acc[c]) acc[c] = ch[c];
+        }
+        if (++apu_dbg.scope_count >= APU_SCOPE_SPP) {
+            int p = apu_dbg.scope_pos & (APU_SCOPE_W - 1);
+            apu_dbg.scope_p1[p]  = acc[0];
+            apu_dbg.scope_p2[p]  = acc[1];
+            apu_dbg.scope_tri[p] = acc[2];
+            apu_dbg.scope_noi[p] = acc[3];
+            apu_dbg.scope_dmc[p] = acc[4];
+            apu_dbg.scope_mix[p] = acc[5];
+            apu_dbg.scope_pos++;
+            apu_dbg.scope_count  = 0;
+            memset(apu_dbg.scope_acc, 0, sizeof(apu_dbg.scope_acc));
+        }
     }
 }
 

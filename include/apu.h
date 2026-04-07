@@ -136,7 +136,10 @@ uint8_t apu_read(uint16_t addr); // $4015 only
 void apu_write(uint16_t addr, uint8_t data); // $4000-$4017
 uint32_t apu_get_frame_cycles(void);
 
-#define APU_WAVE_LEN 256
+// Scrolling scope: each column = APU_SCOPE_SPP audio samples (peak-held).
+// At 44100 Hz / 256 SPP = ~172 cols/sec → ~2.9 cols/frame at 60fps → smooth scroll.
+#define APU_SCOPE_W   512   // columns in the circular scope buffer (power of 2)
+#define APU_SCOPE_SPP 256   // audio samples accumulated per column
 
 typedef struct {
     bool     enabled;            // set true when cpu.testing_mode is on
@@ -151,13 +154,17 @@ typedef struct {
     uint32_t diag_interval;      // frames between debug prints
     uint32_t diag_counter;       // counts up to diag_interval
 
-    float wave_p1[APU_WAVE_LEN];
-    float wave_p2[APU_WAVE_LEN];
-    float wave_tri[APU_WAVE_LEN];
-    float wave_noi[APU_WAVE_LEN];
-    float wave_dmc[APU_WAVE_LEN];
-    float wave_mix[APU_WAVE_LEN];
-    int   wave_pos;              // next-write index (circular)
+    // Scrolling scope buffers — one entry per APU_SCOPE_SPP audio samples
+    float scope_p1 [APU_SCOPE_W];
+    float scope_p2 [APU_SCOPE_W];
+    float scope_tri[APU_SCOPE_W];
+    float scope_noi[APU_SCOPE_W];
+    float scope_dmc[APU_SCOPE_W];
+    float scope_mix[APU_SCOPE_W];
+    int   scope_pos;             // next write column (circular, mod APU_SCOPE_W)
+    int   scope_count;           // audio samples accumulated in current column
+    float scope_acc[6];          // per-channel peak accumulators [p1,p2,tri,noi,dmc,mix]
+
     int   sample_rate;           // actual SDL device rate (set by apu_set_output_sample_rate)
 } APUDebug;
 

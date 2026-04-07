@@ -6,11 +6,13 @@
 RingBuffer ring;
 
 uint32_t ring_buffer_available(void) {
-    return (ring.write_pos - ring.read_pos) & RING_BUFFER_MASK;
+    // No mask here — the raw difference is the true fill level.
+    // Indices use & RING_BUFFER_MASK only when accessing the array.
+    return ring.write_pos - ring.read_pos;
 }
 
 uint32_t ring_buffer_free_space(void) {
-    return RING_BUFFER_SIZE - 1 - ring_buffer_available();
+    return RING_BUFFER_SIZE - ring_buffer_available();
 }
 
 void ring_buffer_push(float sample) {

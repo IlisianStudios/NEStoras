@@ -47,14 +47,14 @@ void init_audio(void) {
     want.callback = audio_callback;
     want.userdata = NULL;
 
-    audio_dev = SDL_OpenAudioDevice(NULL, 0, &want, &have,
-    SDL_AUDIO_ALLOW_FREQUENCY_CHANGE);
+    audio_dev = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0);
 
     if (audio_dev == 0) {
         printf("Failed to open audio: %s\n", SDL_GetError());
     } else {
         printf("Audio opened: freq=%d, format=0x%04X, channels=%d, samples=%d\n",
                have.freq, have.format, have.channels, have.samples);
+        apu_set_output_sample_rate(have.freq);
         SDL_PauseAudioDevice(audio_dev, 0);
     }
 }

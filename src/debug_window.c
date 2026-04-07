@@ -38,8 +38,8 @@
                  + LINE_H + LINE_H + PAD_Y)
 #define STATE_Y         (DBG_WIN_H - STATE_H)
 
-// Waveform section — 5 graphs between log and state
-#define WAVE_COUNT      5
+// Waveform section — 6 graphs between log and state (P1 P2 TR NO DM MX)
+#define WAVE_COUNT      6
 #define WAVE_H          24
 #define WAVE_GAP        3
 #define WAVE_LABEL_W    20
@@ -242,7 +242,8 @@ static void snapshot_waveforms(void) {
         wave_snap[1][i] = apu_dbg.wave_p2[s];
         wave_snap[2][i] = apu_dbg.wave_tri[s];
         wave_snap[3][i] = apu_dbg.wave_noi[s];
-        wave_snap[4][i] = apu_dbg.wave_mix[s];
+        wave_snap[4][i] = apu_dbg.wave_dmc[s];
+        wave_snap[5][i] = apu_dbg.wave_mix[s];
     }
 }
 
@@ -271,12 +272,13 @@ static void draw_waveform(int x, int y, int w, int h,
 }
 
 static void render_waveforms(void) {
-    static const char *labels[]  = { "P1", "P2", "TR", "NO", "MX" };
+    static const char *labels[]  = { "P1", "P2", "TR", "NO", "DM", "MX" };
     static const SDL_Color cols[] = {
-        { 80, 255, 100, 255 },   // P1: green
+        {  80, 255, 100, 255 },  // P1: green
         { 100, 200, 255, 255 },  // P2: cyan
-        { 255, 200, 80,  255 },  // TR: amber
+        { 255, 200,  80, 255 },  // TR: amber
         { 255, 100, 200, 255 },  // NO: pink
+        { 255, 140,  60, 255 },  // DM: orange
         { 220, 220, 220, 255 },  // MX: white
     };
 
@@ -395,6 +397,10 @@ static void render_state(const CPU *cpu) {
 
     // ── Audio ────────────────────────────────────────
     draw_text(PAD_X, y, "Audio", COL_HEADING);
+    if (apu_dbg.sample_rate > 0) {
+        snprintf(buf, sizeof(buf), "@ %d Hz", apu_dbg.sample_rate);
+        draw_text(PAD_X + 52, y, buf, COL_LABEL);
+    }
     y += LINE_H;
 
     uint32_t avail = ring_buffer_available();

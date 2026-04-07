@@ -129,6 +129,7 @@ typedef struct {
 extern APU apu;
 
 void apu_init(void);
+void apu_set_output_sample_rate(int rate); // call after SDL device is opened
 void apu_step(CPU *cpu);
 float apu_mix(void);
 uint8_t apu_read(uint16_t addr); // $4015 only
@@ -154,8 +155,10 @@ typedef struct {
     float wave_p2[APU_WAVE_LEN];
     float wave_tri[APU_WAVE_LEN];
     float wave_noi[APU_WAVE_LEN];
+    float wave_dmc[APU_WAVE_LEN];
     float wave_mix[APU_WAVE_LEN];
     int   wave_pos;              // next-write index (circular)
+    int   sample_rate;           // actual SDL device rate (set by apu_set_output_sample_rate)
 } APUDebug;
 
 extern APUDebug apu_dbg;

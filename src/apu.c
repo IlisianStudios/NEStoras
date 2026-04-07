@@ -15,6 +15,7 @@ DMC dmc;
 
 static double sample_accumulator = 0.0;
 static double cycles_per_sample = 1789773.0 / 44100.0;
+static int    output_sample_rate = 44100;
 static bool otherCycle = false;
 
 static uint32_t nmi_cycles = 0;
@@ -49,6 +50,14 @@ uint32_t apu_get_frame_cycles(void) {
     return nmi_cycles;
 }
 
+void apu_set_output_sample_rate(int rate) {
+    output_sample_rate = rate;
+    bool pal = (cartridge && cartridge->is_pal);
+    double cpu_freq = pal ? 1662607.0 : 1789773.0;
+    cycles_per_sample = cpu_freq / rate;
+    apu_dbg.sample_rate = rate;
+}
+
 void apu_init(void) {
     memset(&pulse1,   0, sizeof(pulse1));
     memset(&pulse2,   0, sizeof(pulse2));
@@ -69,7 +78,7 @@ void apu_init(void) {
     if (pal) {
         dmc_rates = dmc_pal_rates;
         nmi_period        = 33248;
-        cycles_per_sample = 1662607.0 / 44100.0;
+        cycles_per_sample = 1662607.0 / output_sample_rate;
         frame_periods_4   = FRAME_PERIOD_4_PAL;
         frame_periods_5   = FRAME_PERIOD_5_PAL;
         // Fake PPU thresholds scaled for PAL frame
@@ -80,7 +89,7 @@ void apu_init(void) {
     } else {
         dmc_rates = dmc_ntsc_rates;
         nmi_period        = 29780;
-        cycles_per_sample = 1789773.0 / 44100.0;
+        cycles_per_sample = 1789773.0 / output_sample_rate;
         frame_periods_4   = FRAME_PERIOD_4_NTSC;
         frame_periods_5   = FRAME_PERIOD_5_NTSC;
         ppu_vblank_end    = 2387;
@@ -92,7 +101,8 @@ void apu_init(void) {
 
 void apu_debug_reset(void) {
     memset(&apu_dbg, 0, sizeof(apu_dbg));
-    apu_dbg.diag_interval = 300;  // default: print every 300 frames
+    apu_dbg.diag_interval  = 300;
+    apu_dbg.sample_rate    = output_sample_rate;  // preserve across ROM reloads
 }
 
 void apu_debug_print(CPU *cpu) {
@@ -415,6 +425,7 @@ void apu_step(CPU *cpu) {
                                 && noise.length_counter > 0
                                 && (noise.lfsr & 1) == 0)
                                ? nvol / 15.0f : 0.0f;
+        apu_dbg.wave_dmc[wp] = apu.dmc_enabled ? (float)dmc.output_level / 127.0f : 0.0f;
         apu_dbg.wave_mix[wp] = mix * 0.5f;   // mix is 2× boosted; scale back to [0,1]
         apu_dbg.wave_pos = (wp + 1) % APU_WAVE_LEN;
     }

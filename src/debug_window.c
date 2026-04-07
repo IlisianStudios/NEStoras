@@ -183,6 +183,7 @@ bool debug_window_init(SDL_Window *main_window, bool *testing_mode) {
         fprintf(stderr, "debug_window: SDL_CreateRenderer failed: %s\n", SDL_GetError());
         SDL_DestroyWindow(dbg_win); dbg_win = NULL;
         TTF_CloseFont(dbg_font);   dbg_font = NULL;
+        TTF_Quit();
         return false;
     }
 

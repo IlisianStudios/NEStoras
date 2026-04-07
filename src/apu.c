@@ -211,29 +211,32 @@ void half_frame_pulse(Pulse *pulse) {
     if (!pulse->length_halt && pulse->length_counter > 0)
         pulse->length_counter--;
 
-    if (pulse->sweep_divider > 0)
-        pulse->sweep_divider--;
-    else {
-        pulse->sweep_divider = pulse->sweep_period;
-        if (pulse->sweep_enabled && pulse->sweep_shift > 0) {
-            const uint16_t delta = pulse->timer_period >> pulse->sweep_shift;
+    // Sweep unit — nesdev wiki ordering:
+    // 1. If divider==0 AND enabled AND shift>0 AND not muted: adjust period
+    // 2. If divider==0 OR reload flag: reload divider, clear flag
+    // 3. Otherwise: decrement divider
 
-            if (pulse->sweep_negate) {
-                pulse->timer_period -= delta;
-                // In 2A03, the negate mode adds an extra -1 for pulse 1
-                if (pulse == &pulse1)
-                    pulse->timer_period -= 1;
-            }
-            else {
-                pulse->timer_period += delta;
-            }
-        }
+    // Compute target period for mute check (always computed, even if sweep disabled)
+    uint16_t delta = pulse->timer_period >> pulse->sweep_shift;
+    uint16_t target;
+    if (pulse->sweep_negate) {
+        target = pulse->timer_period - delta;
+        if (pulse == &pulse1) target--;   // pulse 1 extra -1
+    } else {
+        target = pulse->timer_period + delta;
+    }
+    bool muted = (pulse->timer_period < 8) || (target > 0x7FF);
 
+    if (pulse->sweep_divider == 0 && pulse->sweep_enabled
+        && pulse->sweep_shift > 0 && !muted) {
+        pulse->timer_period = target;
     }
 
-    if (pulse->sweep_reload){
-        pulse->sweep_reload = false;
+    if (pulse->sweep_divider == 0 || pulse->sweep_reload) {
         pulse->sweep_divider = pulse->sweep_period;
+        pulse->sweep_reload  = false;
+    } else {
+        pulse->sweep_divider--;
     }
 }
 

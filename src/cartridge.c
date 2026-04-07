@@ -100,6 +100,7 @@ bool cartridge_load(const char* path) {
 }
 
 void cartridge_free(void) {
+    if (!cartridge) return;
     free(cartridge->prg_rom);
     free(cartridge->chr_rom);
     free(cartridge);

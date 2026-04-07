@@ -26,12 +26,12 @@
 #define BAR_SLIM_H    4
 
 // State section height — must match render_state() exactly:
-//   CPU(3 lines +6)  APU(1 +4)
+//   CPU(3 lines +6)  APU(1+rate_line +4)
 //   3 channels(line+bar+gap4)  last channel(+6 extra)
 //   Audio hdr(1)  Audio data(1)  Audio bar(+gap4+6)
 //   Controller(1+6)  Cartridge(1+6)  Separator(4)
 //   Footer(2 lines + PAD_Y)
-#define STATE_H  ((3*LINE_H+6) + (LINE_H+4) \
+#define STATE_H  ((3*LINE_H+6) + (2*LINE_H+4) \
                  + 3*(LINE_H+BAR_SLIM_H+4) + (LINE_H+BAR_SLIM_H+4+6) \
                  + LINE_H + LINE_H + (BAR_SLIM_H+4+6) \
                  + (LINE_H+6) + (LINE_H+6) + 4 \
@@ -330,6 +330,20 @@ static void render_state(const CPU *cpu) {
     snprintf(buf, sizeof(buf), "$4015=$%02X   NMIs=%u   writes=%u",
              apu_dbg.last_status_value, apu_dbg.nmi_count, apu_dbg.apu_write_count);
     draw_text(PAD_X + 40, y, buf, COL_LABEL);
+    y += LINE_H;
+
+    // Real-time rate — thresholds adapt to PAL (50 Hz) or NTSC (60 Hz)
+    if (apu_dbg.measured_frame_hz > 0.0f) {
+        float target = (cartridge && cartridge->is_pal) ? 50.0f : 60.0f;
+        SDL_Color frm_col = (apu_dbg.measured_frame_hz > target + 2.0f
+                          || apu_dbg.measured_frame_hz < target - 2.0f)
+                          ? COL_OFF : COL_ON;
+        snprintf(buf, sizeof(buf), "%.1f frm/s  %.1f NMI/s  %.0f smp/s  %s",
+                 apu_dbg.measured_frame_hz, apu_dbg.measured_nmi_hz,
+                 apu_dbg.measured_sample_hz,
+                 (cartridge && cartridge->is_pal) ? "PAL" : "NTSC");
+        draw_text(PAD_X, y, buf, frm_col);
+    }
     y += LINE_H + 4;
 
     // ── Channels ─────────────────────────────────────

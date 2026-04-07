@@ -15,6 +15,14 @@ uint32_t timing_update(Timing *t) {
         return UINT32_MAX;
     }
 
+    if (t->mode == AUDIO_SYNC) {
+        // Run one frame's worth of CPU cycles per iteration (~29780 NTSC).
+        // The ring buffer's blocking push is the real throttle — it stalls
+        // the emulator when audio output can't keep up, locking us to the
+        // exact sample rate of the audio hardware.
+        return (uint32_t)CPU_HZ / 60;
+    }
+
     uint64_t now = SDL_GetTicks64();
     uint64_t elapsed = now - t->last_ticks;
     t->last_ticks = now;

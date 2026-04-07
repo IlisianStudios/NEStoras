@@ -111,7 +111,7 @@ void handle_event_type(const SDL_Event *event) {
             cpu_reset(&cpu);
             cpu.nestest_comp = false;
             cpu.nestest_passed = false;
-            timing_init(&timing, FIXED);
+            timing_init(&timing, AUDIO_SYNC);
             ring_buffer_init();
             apu_debug_reset();
 
@@ -217,7 +217,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    timing_init(&timing, FIXED);
+    timing_init(&timing, AUDIO_SYNC);
     while (running) {
         SDL2_loop();
 

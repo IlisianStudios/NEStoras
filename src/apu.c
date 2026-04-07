@@ -4,6 +4,7 @@
 #include "cartridge.h"
 #include "ringbuffer.h"
 #include "debug_window.h"
+#include <SDL2/SDL.h>
 
 APU apu;
 
@@ -17,6 +18,31 @@ static double sample_accumulator = 0.0;
 static double cycles_per_sample = 1789773.0 / 44100.0;
 static int    output_sample_rate = 44100;
 static bool otherCycle = false;
+
+// NES hardware audio filters (nesdev wiki coefficients)
+// High-pass 1: ~90 Hz — removes DC offset
+// High-pass 2: ~440 Hz — NES-specific (2A03 output stage)
+// Low-pass:  ~12 kHz — 2A03 DAC + TV/CRT rolloff
+static float hpf1_prev_in, hpf1_prev_out;
+static float hpf2_prev_in, hpf2_prev_out;
+static float lpf_prev_out;
+
+static float audio_filter(float in) {
+    // High-pass 1: ~90 Hz
+    float hpf1 = 0.999835f * hpf1_prev_out + in - hpf1_prev_in;
+    hpf1_prev_in  = in;
+    hpf1_prev_out = hpf1;
+
+    // High-pass 2: ~440 Hz
+    float hpf2 = 0.996039f * hpf2_prev_out + hpf1 - hpf2_prev_in;
+    hpf2_prev_in  = hpf1;
+    hpf2_prev_out = hpf2;
+
+    // Low-pass: ~12 kHz
+    lpf_prev_out += 0.815686f * (hpf2 - lpf_prev_out);
+
+    return lpf_prev_out;
+}
 
 static uint32_t nmi_cycles = 0;
 static uint32_t nmi_period = 29780;  // NTSC default; PAL = 33248
@@ -73,6 +99,11 @@ void apu_init(void) {
     otherCycle         = false;
     ppu_nmi_enable     = false;
 
+    // Reset audio filters
+    hpf1_prev_in = hpf1_prev_out = 0.0f;
+    hpf2_prev_in = hpf2_prev_out = 0.0f;
+    lpf_prev_out = 0.0f;
+
     // Region-specific timing
     bool pal = (cartridge && cartridge->is_pal);
     if (pal) {
@@ -107,6 +138,20 @@ void apu_debug_reset(void) {
 
 void apu_debug_print(CPU *cpu) {
     if (!apu_dbg.enabled) return;
+
+    // Real-time rate measurement (every 1 second)
+    uint32_t now_tick = SDL_GetTicks();
+    uint32_t dt = now_tick - apu_dbg.rate_tick;
+    if (dt >= 1000) {
+        float secs = dt / 1000.0f;
+        apu_dbg.measured_nmi_hz    = (apu_dbg.nmi_count - apu_dbg.rate_nmi_snap) / secs;
+        apu_dbg.measured_frame_hz  = (apu_dbg.frame_count - apu_dbg.rate_frame_snap) / secs;
+        apu_dbg.measured_sample_hz = (apu_dbg.total_samples - apu_dbg.rate_sample_snap) / secs;
+        apu_dbg.rate_tick        = now_tick;
+        apu_dbg.rate_nmi_snap    = apu_dbg.nmi_count;
+        apu_dbg.rate_frame_snap  = apu_dbg.frame_count;
+        apu_dbg.rate_sample_snap = apu_dbg.total_samples;
+    }
 
     apu_dbg.diag_counter++;
     if (apu_dbg.diag_counter < apu_dbg.diag_interval) return;
@@ -292,6 +337,7 @@ void apu_step(CPU *cpu) {
     // Fake NMI — PPU vblank fires every frame (NTSC: ~29780, PAL: ~33248 CPU cycles)
     if (++nmi_cycles >= nmi_period) {
         nmi_cycles = 0;
+        apu_dbg.frame_count++;   // total periods (even if NMI disabled)
         if (ppu_nmi_enable) {
             cpu_nmi(cpu);
             apu_dbg.nmi_count++;
@@ -405,6 +451,7 @@ void apu_step(CPU *cpu) {
     if (sample_accumulator >= cycles_per_sample) {
         sample_accumulator -= cycles_per_sample;
         float mix = apu_mix();
+        mix = audio_filter(mix);
         apu_dbg.total_samples++;
         if (mix > 0.001f || mix < -0.001f) apu_dbg.nonzero_samples++;
         float absmix = mix < 0 ? -mix : mix;

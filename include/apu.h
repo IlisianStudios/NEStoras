@@ -166,6 +166,16 @@ typedef struct {
     float scope_acc[6];          // per-channel peak accumulators [p1,p2,tri,noi,dmc,mix]
 
     int   sample_rate;           // actual SDL device rate (set by apu_set_output_sample_rate)
+
+    // Real-time rate measurement
+    uint32_t rate_tick;          // SDL_GetTicks at last measurement
+    uint32_t rate_nmi_snap;      // nmi_count at last measurement
+    uint32_t rate_sample_snap;   // total_samples at last measurement
+    uint32_t rate_frame_snap;    // frame_count at last measurement
+    float    measured_nmi_hz;    // NMIs per real second (only when enabled)
+    float    measured_frame_hz;  // total frame periods per real second
+    float    measured_sample_hz; // audio samples per real second
+    uint32_t frame_count;        // total NMI periods (regardless of ppu_nmi_enable)
 } APUDebug;
 
 extern APUDebug apu_dbg;

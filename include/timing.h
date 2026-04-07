@@ -10,7 +10,8 @@
 
 typedef enum  {
     UNBOUND,
-    FIXED
+    FIXED,
+    AUDIO_SYNC    // ring-buffer back-pressure is the sole throttle
 } TimingMode;
 
 typedef struct {

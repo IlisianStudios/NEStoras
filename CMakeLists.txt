@@ -23,6 +23,8 @@ add_executable(NEStoras
         include/ringbuffer.h
         src/debug_window.c
         include/debug_window.h
+        include/ppu.h
+        src/ppu.c
 )
 
 target_include_directories(NEStoras PRIVATE

@@ -2,6 +2,7 @@
 #include "apu.h"
 #include "cpu.h"
 #include "bus.h"
+#include "ppu.h"
 #include "ringbuffer.h"
 #include "cartridge.h"
 
@@ -329,7 +330,7 @@ static void render_state(const CPU *cpu) {
     // ── APU ──────────────────────────────────────────
     draw_text(PAD_X, y, "APU", COL_HEADING);
     snprintf(buf, sizeof(buf), "$4015=$%02X   NMIs=%u   writes=%u",
-             apu_dbg.last_status_value, apu_dbg.nmi_count, apu_dbg.apu_write_count);
+             apu_dbg.last_status_value, ppu_dbg.nmi_count, apu_dbg.apu_write_count);
     draw_text(PAD_X + 40, y, buf, COL_LABEL);
     y += LINE_H;
 

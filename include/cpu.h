@@ -22,7 +22,7 @@ extern Timing timing;
 #define FLAG_V 0x40  // Overflow
 #define FLAG_N 0x80  // Negative
 
-typedef struct{
+typedef struct CPU {
     uint8_t a;
     uint8_t x;
     uint8_t y;
@@ -32,6 +32,10 @@ typedef struct{
 
     uint8_t cycles;
     uint64_t total_cycles;
+
+    // Cycles the CPU is currently stalled (e.g., OAMDMA). The catch-up loop
+    // in run_cycles drains these by stepping APU/PPU but not cpu_step.
+    uint32_t stall_cycles;
 
     uint16_t addr_abs;
     uint16_t addr_rel;

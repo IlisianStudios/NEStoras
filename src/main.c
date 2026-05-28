@@ -10,6 +10,7 @@
 #include "nestest_compare.h"
 #include "ringbuffer.h"
 #include "debug_window.h"
+#include "ppu.h"
 
 bool running = true;
 CPU cpu;
@@ -17,6 +18,9 @@ static SDL_AudioDeviceID audio_dev = 0;
 Timing timing;
 static bool cpu_paused = false;
 static bool cpu_step_one = false;  // advance exactly one instruction
+
+static SDL_Renderer *main_renderer = NULL;
+static SDL_Texture  *frame_tex = NULL;
 
 void debug_nestest(void) {
     printf("DEBUG mode enabled\n");
@@ -71,8 +75,35 @@ void init(void) {
     SDL_EventState(SDL_DROPFILE, SDL_ENABLE);
     ring_buffer_init();
     apu_init();
+    ppu_init();
     apu_debug_reset();
     init_audio();
+}
+
+static void init_renderer(SDL_Window *window) {
+    // No vsync — the audio ring buffer drives our pacing (AUDIO_SYNC).
+    main_renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    if (!main_renderer) {
+        fprintf(stderr, "SDL_CreateRenderer failed: %s\n", SDL_GetError());
+        exit(1);
+    }
+    SDL_RenderSetLogicalSize(main_renderer, PPU_FRAME_W, PPU_FRAME_H);
+
+    frame_tex = SDL_CreateTexture(main_renderer,
+        SDL_PIXELFORMAT_ARGB8888,
+        SDL_TEXTUREACCESS_STREAMING,
+        PPU_FRAME_W, PPU_FRAME_H);
+    if (!frame_tex) {
+        fprintf(stderr, "SDL_CreateTexture failed: %s\n", SDL_GetError());
+        exit(1);
+    }
+}
+
+static void present_frame(void) {
+    SDL_UpdateTexture(frame_tex, NULL, ppu_framebuffer, PPU_FRAME_W * sizeof(uint32_t));
+    SDL_RenderClear(main_renderer);
+    SDL_RenderCopy(main_renderer, frame_tex, NULL, NULL);
+    SDL_RenderPresent(main_renderer);
 }
 
 SDL_Window* setup_window(void) {
@@ -102,12 +133,24 @@ void handle_event_type(const SDL_Event *event) {
             running = false;
             break;
         }
+        case SDL_WINDOWEVENT: {
+            // The debug window consumes its own CLOSE in debug_window_handle_event
+            // (returns true), so any close reaching here is the main window's
+            // red button on macOS / X button on Win/Linux.
+            if (event->window.event == SDL_WINDOWEVENT_CLOSE) {
+                nestest_close(&nestest_log);
+                try_free_cartridge();
+                running = false;
+            }
+            break;
+        }
         case SDL_DROPFILE: {
             printf("Dropping file: %s\n", event->drop.file);
             if (!cartridge_load(event->drop.file))
                 return;
 
             apu_init();
+            ppu_init();
             cpu_reset(&cpu);
             cpu.nestest_comp = false;
             cpu.nestest_passed = false;
@@ -200,6 +243,7 @@ int main(int argc, char** argv) {
 
     init();
     SDL_Window* window = setup_window();
+    init_renderer(window);
     debug_window_init(window, &cpu.testing_mode);
 
 #ifndef NDEBUG
@@ -211,6 +255,7 @@ int main(int argc, char** argv) {
         printf("Loading ROM from command line: %s\n", argv[1]);
         if (cartridge_load(argv[1])) {
             apu_init();
+            ppu_init();
             cpu_reset(&cpu);
             ring_buffer_init();
             apu_debug_reset();
@@ -253,6 +298,11 @@ int main(int argc, char** argv) {
 
         apu_debug_print(&cpu);
 
+        if (ppu_frame_ready()) {
+            ppu_clear_frame_ready();
+            present_frame();
+        }
+
         debug_window_set_paused(cpu_paused);
         debug_window_update(&cpu);
 
@@ -266,6 +316,8 @@ int main(int argc, char** argv) {
 
     try_free_cartridge();
     debug_window_destroy();
+    if (frame_tex)      SDL_DestroyTexture(frame_tex);
+    if (main_renderer)  SDL_DestroyRenderer(main_renderer);
     if (audio_dev) SDL_CloseAudioDevice(audio_dev);
     SDL_DestroyWindow(window);
     SDL_Quit();

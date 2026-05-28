@@ -134,7 +134,6 @@ void apu_step(CPU *cpu);
 float apu_mix(void);
 uint8_t apu_read(uint16_t addr); // $4015 only
 void apu_write(uint16_t addr, uint8_t data); // $4000-$4017
-uint32_t apu_get_frame_cycles(void);
 
 // Scrolling scope: each column = APU_SCOPE_SPP audio samples (peak-held).
 // At 44100 Hz / 256 SPP = ~172 cols/sec → ~2.9 cols/frame at 60fps → smooth scroll.
@@ -143,7 +142,6 @@ uint32_t apu_get_frame_cycles(void);
 
 typedef struct {
     bool     enabled;            // set true when cpu.testing_mode is on
-    uint32_t nmi_count;
     uint32_t apu_write_count;
     uint32_t status_write_count; // $4015 writes
     uint32_t nonzero_samples;
@@ -167,25 +165,18 @@ typedef struct {
 
     int   sample_rate;           // actual SDL device rate (set by apu_set_output_sample_rate)
 
-    // Real-time rate measurement
+    // Real-time rate measurement — frame_count / nmi_count come from ppu_dbg
     uint32_t rate_tick;          // SDL_GetTicks at last measurement
-    uint32_t rate_nmi_snap;      // nmi_count at last measurement
+    uint32_t rate_nmi_snap;      // ppu_dbg.nmi_count at last measurement
     uint32_t rate_sample_snap;   // total_samples at last measurement
-    uint32_t rate_frame_snap;    // frame_count at last measurement
-    float    measured_nmi_hz;    // NMIs per real second (only when enabled)
+    uint32_t rate_frame_snap;    // ppu_dbg.frame_count at last measurement
+    float    measured_nmi_hz;    // NMIs per real second
     float    measured_frame_hz;  // total frame periods per real second
     float    measured_sample_hz; // audio samples per real second
-    uint32_t frame_count;        // total NMI periods (regardless of ppu_nmi_enable)
 } APUDebug;
 
 extern APUDebug apu_dbg;
 
 void apu_debug_reset(void);
 void apu_debug_print(CPU *cpu);
-
-// PPU timing thresholds (set by apu_init based on PAL/NTSC)
-extern uint32_t ppu_vblank_end;
-extern uint32_t ppu_vblank_start;
-extern uint32_t ppu_sp0_hit_start;
-extern uint32_t ppu_sp0_hit_end;
 

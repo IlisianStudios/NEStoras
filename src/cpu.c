@@ -5,9 +5,14 @@
 #include "debug_window.h"
 #include <stdio.h>
 #include "apu.h"
+#include "ppu.h"
+#include "cartridge.h"
 #include "ringbuffer.h"
 
 NestestLog nestest_log = {0};
+
+// PAL CPU:PPU ratio is 1:3.2 — every 5th CPU cycle, the PPU runs one extra dot.
+static int pal_dot_phase = 0;
 
 void log_cpu_state(const CPU *cpu, Instruction inst, uint16_t pc) {
     // Format: "C000 4C F5C5 JMP $F5C5        A:00 X:00 Y:00 P:24 SP:FD"
@@ -76,7 +81,9 @@ void cpu_reset(CPU *cpu){
     cpu->pc = (high << 8) | low; // set program counter to reset vector
     cpu->cycles = 0;
     cpu->total_cycles = 7;
+    cpu->stall_cycles = 0;
     cpu->testing_mode = false;
+    pal_dot_phase = 0;
 }
 
 // non-maskable interrupt
@@ -93,8 +100,14 @@ void cpu_nmi(CPU *cpu){
     // read from NMI vector
     uint8_t lo = bus_read(0xFFFA); // low byte
     uint8_t hi = bus_read(0xFFFB); // high byte
-    // loads program counter with NMI handler 
+    // loads program counter with NMI handler
     cpu->pc = (hi << 8) | lo;
+
+    // NMI takes 7 cycles on real hardware. Bumping cpu->cycles extends the
+    // per-cycle tick loop in run_cycles so APU/PPU advance through those
+    // 7 cycles (21 PPU dots) the same as they would on real HW.
+    cpu->cycles      += 7;
+    cpu->total_cycles += 7;
 }
 
 // interrupt request
@@ -111,6 +124,10 @@ void cpu_irq(CPU *cpu){
     uint8_t lo = bus_read(0xFFFE);
     uint8_t hi = bus_read(0xFFFF);
     cpu->pc = (hi << 8) | lo;
+
+    // IRQ takes 7 cycles on real hardware; same bookkeeping as NMI.
+    cpu->cycles      += 7;
+    cpu->total_cycles += 7;
 }
 
 void audio_callback(void *userdata, Uint8 *stream, int len) {
@@ -121,6 +138,19 @@ void audio_callback(void *userdata, Uint8 *stream, int len) {
     }
 }
 
+static inline void tick_one_cpu_cycle(CPU *cpu) {
+    apu_step(cpu);
+    ppu_step(cpu);
+    ppu_step(cpu);
+    ppu_step(cpu);
+    if (cartridge && cartridge->is_pal) {
+        if (++pal_dot_phase >= 5) {
+            ppu_step(cpu);
+            pal_dot_phase = 0;
+        }
+    }
+}
+
 void run_cycles(CPU *cpu, uint64_t cycles) {
     uint32_t ran = 0;
 
@@ -128,10 +158,19 @@ void run_cycles(CPU *cpu, uint64_t cycles) {
         cpu_step(cpu);
 
         for (uint8_t i = 0; i < cpu->cycles; i++) {
-            apu_step(cpu);
+            tick_one_cpu_cycle(cpu);
         }
 
         ran += cpu->cycles;
+
+        // Drain any DMA stall (e.g. OAMDMA). The CPU doesn't run during
+        // these cycles, but the APU and PPU do.
+        while (cpu->stall_cycles > 0) {
+            tick_one_cpu_cycle(cpu);
+            cpu->total_cycles++;
+            cpu->stall_cycles--;
+            ran++;
+        }
 
         // In unbound mode we were called with max_cycles=1,
         // so this breaks after the first instruction.

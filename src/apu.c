@@ -4,6 +4,7 @@
 #include "cartridge.h"
 #include "ringbuffer.h"
 #include "debug_window.h"
+#include "ppu.h"
 #include <SDL2/SDL.h>
 
 APU apu;
@@ -44,9 +45,6 @@ static float audio_filter(float in) {
     return lpf_prev_out;
 }
 
-static uint32_t nmi_cycles = 0;
-static uint32_t nmi_period = 29780;  // NTSC default; PAL = 33248
-
 // NTSC APU frame counter periods (CPU cycles)
 static const uint32_t FRAME_PERIOD_4_NTSC[4] = { 7457, 14913, 22371, 29829 };
 static const uint32_t FRAME_PERIOD_5_NTSC[5] = { 7457, 14913, 22371, 29829, 37281 };
@@ -64,17 +62,7 @@ static const uint16_t dmc_ntsc_rates[16] = {428, 380, 340, 320, 286, 254, 226, 2
 static const uint16_t dmc_pal_rates[16]  = {398,354,316,298,276,236,210,198,176,148,132,118,98,78,66,50};
 static const uint16_t *dmc_rates;
 
-// PPU-timing thresholds for fake $2002 (set by apu_init)
-uint32_t ppu_vblank_end    = 2387;   // fc < this → vblank still active after NMI
-uint32_t ppu_vblank_start  = 27393;  // fc >= this → entering vblank
-uint32_t ppu_sp0_hit_start = 5000;   // fc >= this → sprite 0 hit
-uint32_t ppu_sp0_hit_end   = 29000;  // fc < this → sprite 0 hit
-
 APUDebug apu_dbg;
-
-uint32_t apu_get_frame_cycles(void) {
-    return nmi_cycles;
-}
 
 void apu_set_output_sample_rate(int rate) {
     output_sample_rate = rate;
@@ -94,10 +82,8 @@ void apu_init(void) {
     noise.lfsr         = 1;
     dmc.bits_remaining = 8;    // shift register starts empty but well-defined
     dmc.silence        = true;
-    nmi_cycles         = 0;
     sample_accumulator = 0.0;
     otherCycle         = false;
-    ppu_nmi_enable     = false;
 
     // Reset audio filters
     hpf1_prev_in = hpf1_prev_out = 0.0f;
@@ -108,25 +94,14 @@ void apu_init(void) {
     bool pal = (cartridge && cartridge->is_pal);
     if (pal) {
         dmc_rates = dmc_pal_rates;
-        nmi_period        = 33248;
         cycles_per_sample = 1662607.0 / output_sample_rate;
         frame_periods_4   = FRAME_PERIOD_4_PAL;
         frame_periods_5   = FRAME_PERIOD_5_PAL;
-        // Fake PPU thresholds scaled for PAL frame
-        ppu_vblank_end    = 2665;   // ~2387 * 33248/29780
-        ppu_vblank_start  = 30583;  // ~27393 * 33248/29780
-        ppu_sp0_hit_start = 5582;   // ~5000 * 33248/29780
-        ppu_sp0_hit_end   = 32379;  // ~29000 * 33248/29780
     } else {
         dmc_rates = dmc_ntsc_rates;
-        nmi_period        = 29780;
         cycles_per_sample = 1789773.0 / output_sample_rate;
         frame_periods_4   = FRAME_PERIOD_4_NTSC;
         frame_periods_5   = FRAME_PERIOD_5_NTSC;
-        ppu_vblank_end    = 2387;
-        ppu_vblank_start  = 27393;
-        ppu_sp0_hit_start = 5000;
-        ppu_sp0_hit_end   = 29000;
     }
 }
 
@@ -144,12 +119,13 @@ void apu_debug_print(CPU *cpu) {
     uint32_t dt = now_tick - apu_dbg.rate_tick;
     if (dt >= 1000) {
         float secs = dt / 1000.0f;
-        apu_dbg.measured_nmi_hz    = (apu_dbg.nmi_count - apu_dbg.rate_nmi_snap) / secs;
-        apu_dbg.measured_frame_hz  = (apu_dbg.frame_count - apu_dbg.rate_frame_snap) / secs;
+        // NMI count + frame count now come from the PPU.
+        apu_dbg.measured_nmi_hz    = (ppu_dbg.nmi_count   - apu_dbg.rate_nmi_snap)    / secs;
+        apu_dbg.measured_frame_hz  = (ppu_dbg.frame_count - apu_dbg.rate_frame_snap)  / secs;
         apu_dbg.measured_sample_hz = (apu_dbg.total_samples - apu_dbg.rate_sample_snap) / secs;
         apu_dbg.rate_tick        = now_tick;
-        apu_dbg.rate_nmi_snap    = apu_dbg.nmi_count;
-        apu_dbg.rate_frame_snap  = apu_dbg.frame_count;
+        apu_dbg.rate_nmi_snap    = ppu_dbg.nmi_count;
+        apu_dbg.rate_frame_snap  = ppu_dbg.frame_count;
         apu_dbg.rate_sample_snap = apu_dbg.total_samples;
     }
 
@@ -179,7 +155,7 @@ void apu_debug_print(CPU *cpu) {
            nv, noise.length_counter, noise.lfsr);
 
     debug_log("  NMIs=%u wr=%u PC=$%04X cyc=%llu",
-           apu_dbg.nmi_count, apu_dbg.apu_write_count,
+           ppu_dbg.nmi_count, apu_dbg.apu_write_count,
            cpu->pc, (unsigned long long)cpu->total_cycles);
 }
 
@@ -337,16 +313,6 @@ static void clock_pulse_timer(Pulse *p) {
 }
 
 void apu_step(CPU *cpu) {
-    // Fake NMI — PPU vblank fires every frame (NTSC: ~29780, PAL: ~33248 CPU cycles)
-    if (++nmi_cycles >= nmi_period) {
-        nmi_cycles = 0;
-        apu_dbg.frame_count++;   // total periods (even if NMI disabled)
-        if (ppu_nmi_enable) {
-            cpu_nmi(cpu);
-            apu_dbg.nmi_count++;
-        }
-    }
-
     // The APU runs at half the CPU clock.
     // Pulse and noise timers tick every other CPU cycle.
     // Triangle ticks every CPU cycle.

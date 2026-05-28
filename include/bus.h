@@ -3,11 +3,11 @@
 #include <stdbool.h>
 
 #include "cartridge.h"
+#include "ppu.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
 extern uint8_t ram[2048];
-extern bool ppu_nmi_enable;
 
 // Controller state — bits: A B Select Start Up Down Left Right
 extern uint8_t controller_state[2];
@@ -16,13 +16,11 @@ extern bool controller_strobe;
 
 extern uint8_t apu_read(uint16_t addr);
 extern void apu_write(uint16_t addr, uint8_t data);
-extern uint32_t apu_get_frame_cycles(void);
 
-// PPU timing thresholds (set by apu_init based on PAL/NTSC)
-extern uint32_t ppu_vblank_end;
-extern uint32_t ppu_vblank_start;
-extern uint32_t ppu_sp0_hit_start;
-extern uint32_t ppu_sp0_hit_end;
+// extern so bus.h's bus_write can stall the CPU for OAMDMA without including
+// cpu.h here (it would cause a cyclic include via cpu.h → bus.h)
+struct CPU;
+extern struct CPU cpu;
 
 static inline uint8_t apu_io_read(uint16_t addr) {
     if (addr == 0x4015) return apu_read(addr);
@@ -57,30 +55,6 @@ static inline void apu_io_write(uint16_t addr, uint8_t data) {
     apu_write(addr, data);
 }
 
-static inline uint8_t ppu_register_read(uint16_t addr) {
-    if (addr == 0x2002) {
-        uint8_t status = 0;
-        uint32_t fc = apu_get_frame_cycles();
-
-        // Vblank flag: set during vblank periods (thresholds adjusted for PAL/NTSC)
-        if (fc < ppu_vblank_end || fc >= ppu_vblank_start)
-            status |= 0x80;
-
-        // Sprite 0 hit (thresholds adjusted for PAL/NTSC)
-        if (fc >= ppu_sp0_hit_start && fc < ppu_sp0_hit_end)
-            status |= 0x40;
-
-        return status;
-    }
-    return 0x00;
-}
-
-static inline void ppu_register_write(uint16_t addr, uint8_t data) {
-    if (addr == 0x2000) {
-        ppu_nmi_enable = (data >> 7) & 1;
-    }
-}
-
 static inline void cartrige_write(uint16_t addr, uint8_t data) {
     (void)addr; (void)data;
 }
@@ -93,7 +67,7 @@ static inline uint8_t bus_read(const uint16_t addr) {
     Address $1000 points there too.
     */
     if (addr < 0x2000) return ram[addr & 0x07ff];
-    else if (addr < 0x4000) return ppu_register_read(addr & 0x2007 );
+    else if (addr < 0x4000) return ppu_register_read(0x2000 | (addr & 0x0007));
     else if (addr < 0x4020) return apu_io_read(addr);
     else if (cartridge && cartridge->mapper.cpu_read) return cartridge->mapper.cpu_read(cartridge, addr);
     else return 0;
@@ -104,7 +78,11 @@ static inline void bus_write(const uint16_t addr, const uint8_t data) {
         ram[addr & 0x07ff] = data;
     }
     else if (addr < 0x4000) {
-        ppu_register_write(0x2000 | (addr & 0x2007), data);
+        ppu_register_write(0x2000 | (addr & 0x0007), data);
+    }
+    else if (addr == 0x4014) {
+        // OAMDMA — intercept before APU/IO handler.
+        ppu_oamdma(data, (CPU *)&cpu);
     }
     else if (addr < 0x4020) {
         apu_io_write(addr, data);

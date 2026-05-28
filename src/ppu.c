@@ -155,6 +155,24 @@ uint8_t ppu_bus_read_debug(uint16_t addr) {
     return ppu_bus_read_internal(addr);
 }
 
+const uint8_t *ppu_oam_view(void) {
+    return ppu.oam;
+}
+
+const uint8_t *ppu_palette_view(void) {
+    return ppu.palette;
+}
+
+uint32_t ppu_sprite_color(uint8_t pal_idx, uint8_t pixel) {
+    if ((pixel & 3) == 0) return 0;
+    uint8_t entry = ppu.palette[0x10 + (pal_idx & 3) * 4 + (pixel & 3)];
+    return NES_PALETTE_ARGB[entry & 0x3F];
+}
+
+uint32_t ppu_master_color(uint8_t index) {
+    return NES_PALETTE_ARGB[index & 0x3F];
+}
+
 // ============================================================================
 //  Loopy scroll helpers
 // ============================================================================

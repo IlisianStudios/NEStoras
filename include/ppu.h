@@ -56,6 +56,22 @@ extern PPUDebug ppu_dbg;
 // Side-effect-free read for the debug window (CHR + nametable viewers).
 uint8_t ppu_bus_read_debug(uint16_t addr);
 
+// Read-only pointer to the 256-byte OAM for the debug window's sprite table.
+// Layout: 64 sprites × 4 bytes (Y, tile, attr, X).
+const uint8_t *ppu_oam_view(void);
+
+// Read-only pointer to the 32-byte palette RAM.
+//   $00-$0F: background palette (4 groups of 4 entries)
+//   $10-$1F: sprite palette     (4 groups of 4 entries)
+const uint8_t *ppu_palette_view(void);
+
+// Resolve a sprite pixel (2-bit value + sprite palette index) to ARGB8888.
+// Returns 0 (alpha=0, transparent) when pixel==0.
+uint32_t ppu_sprite_color(uint8_t pal_idx, uint8_t pixel);
+
+// Master 2C02 palette → ARGB8888. `index` is a master palette entry (0..63).
+uint32_t ppu_master_color(uint8_t index);
+
 #ifdef __cplusplus
 }
 #endif

@@ -14,8 +14,10 @@
 
 #define DBG_WIN_W    520
 #define DBG_WIN_H    960
-#define FONT_SIZE    14
-#define LINE_H       15
+#define FONT_SIZE        14
+#define FONT_SIZE_SMALL  10
+#define LINE_H           15
+#define LINE_H_SMALL     12
 #define PAD_X        12
 #define PAD_Y        10
 
@@ -48,9 +50,26 @@
 #define WAVE_SECTION_H  (LINE_H + 4 + WAVE_COUNT * (WAVE_H + WAVE_GAP))
 #define WAVE_Y          (STATE_Y - WAVE_SECTION_H - 4)
 
-// Log area sits above the waveform section
-#define LOG_AREA_H      (WAVE_Y - 2)
-#define LOG_VISIBLE     ((LOG_AREA_H - PAD_Y) / LINE_H - 1)
+// Log: shrunk to ~10 lines to make room for the PPU panel.
+#define LOG_VISIBLE     10
+#define LOG_AREA_H      (PAD_Y + LINE_H + LOG_VISIBLE * LINE_H + 4)
+
+// PPU panel — between log and waveforms.
+//   Header + 3 state lines + sp0/ovf/NMI line  (4 × LINE_H + 6 spacer)
+//   "Sprites" heading                          (LINE_H + 2 spacer)
+//   Visual sprite grid (8×8 tiles at 3× scale) (SPR_GRID_H = 192)
+#define PPU_Y           LOG_AREA_H
+
+#define SPR_SCALE       3
+#define SPR_CELL_W      (8 * SPR_SCALE)               // 24
+#define SPR_CELL_H      (8 * SPR_SCALE)               // 24
+#define SPR_GRID_COLS   8
+#define SPR_GRID_ROWS   8
+#define SPR_GRID_W      (SPR_GRID_COLS * SPR_CELL_W)  // 192
+#define SPR_GRID_H      (SPR_GRID_ROWS * SPR_CELL_H)  // 192
+#define SPR_LABEL_W     24                            // row-label gutter width
+
+#define PPU_SECTION_H   (4*LINE_H + 6 + LINE_H + 2 + SPR_GRID_H)
 
 // ---------- colour palette ----------------------------------------------
 
@@ -72,6 +91,7 @@ static SDL_Window   *main_win     = NULL;
 static SDL_Window   *dbg_win      = NULL;
 static SDL_Renderer *dbg_renderer = NULL;
 static TTF_Font     *dbg_font     = NULL;
+static TTF_Font     *dbg_font_small = NULL;   // for the OAM table
 static Uint32        dbg_win_id   = 0;
 static bool          dbg_visible  = false;
 static bool         *testing_mode_ptr = NULL;  // points to cpu.testing_mode
@@ -79,6 +99,25 @@ static bool         *testing_mode_ptr = NULL;  // points to cpu.testing_mode
 static uint32_t      last_draw_tick = 0;
 static const uint32_t DRAW_INTERVAL_MS = 16;   // ~60 fps
 static bool          show_paused = false;
+
+// Sprite-viewer cache. Re-render a sprite cell only when its OAM bytes,
+// the relevant ctrl bits, or the sprite-palette region of palette RAM have
+// changed since the last debug frame.
+static SDL_Texture  *sprite_tex = NULL;
+static uint32_t      sprite_pixels[SPR_GRID_W * SPR_GRID_H];
+static uint8_t       sprite_cache_oam[256];
+static uint8_t       sprite_cache_palette[16];   // sprite half of palette RAM
+static uint8_t       sprite_cache_ctrl = 0xFF;   // forces first-frame redraw
+static bool          sprite_cache_inited = false;
+
+// CHR (pattern table) viewer cache. Two 128×128 textures, one per pattern
+// table ($0000 + $1000). Re-rasterised only when the bytes we sample from
+// CHR differ from last frame (cheap heuristic that catches mapper bank
+// switches and CHR-RAM writes without hashing 8 KiB every frame).
+static SDL_Texture  *chr_tex[2]   = { NULL, NULL };
+static uint32_t      chr_pixels[2][128 * 128];
+static uint8_t       chr_sample[32];
+static bool          chr_cache_inited = false;
 
 // No snapshot buffer needed — render_waveforms reads directly from apu_dbg scope buffers.
 
@@ -104,15 +143,23 @@ static TTF_Font *open_mono_font(int size) {
 
 // ---------- drawing helpers ---------------------------------------------
 
-static void draw_text(int x, int y, const char *text, SDL_Color col) {
-    if (!text || !text[0]) return;
-    SDL_Surface *surf = TTF_RenderText_Blended(dbg_font, text, col);
+static void draw_text_f(int x, int y, const char *text, SDL_Color col, TTF_Font *font) {
+    if (!text || !text[0] || !font) return;
+    SDL_Surface *surf = TTF_RenderText_Blended(font, text, col);
     if (!surf) return;
     SDL_Texture *tex = SDL_CreateTextureFromSurface(dbg_renderer, surf);
     SDL_Rect dst = { x, y, surf->w, surf->h };
     SDL_RenderCopy(dbg_renderer, tex, NULL, &dst);
     SDL_DestroyTexture(tex);
     SDL_FreeSurface(surf);
+}
+
+static void draw_text(int x, int y, const char *text, SDL_Color col) {
+    draw_text_f(x, y, text, col, dbg_font);
+}
+
+static void draw_text_small(int x, int y, const char *text, SDL_Color col) {
+    draw_text_f(x, y, text, col, dbg_font_small);
 }
 
 static void draw_bar(int x, int y, int w, int h, float pct, SDL_Color col) {
@@ -164,6 +211,11 @@ bool debug_window_init(SDL_Window *main_window, bool *testing_mode) {
         TTF_Quit();
         return false;
     }
+    dbg_font_small = open_mono_font(FONT_SIZE_SMALL);
+    if (!dbg_font_small) {
+        // Non-fatal — fall back to main font if the small one fails.
+        dbg_font_small = dbg_font;
+    }
 
     dbg_win = SDL_CreateWindow(
         "NEStoras Debug",
@@ -190,13 +242,43 @@ bool debug_window_init(SDL_Window *main_window, bool *testing_mode) {
         return false;
     }
 
+    sprite_tex = SDL_CreateTexture(dbg_renderer,
+        SDL_PIXELFORMAT_ARGB8888,
+        SDL_TEXTUREACCESS_STREAMING,
+        SPR_GRID_W, SPR_GRID_H);
+    if (sprite_tex) {
+        // Initial fill with the cell-background colour
+        for (int i = 0; i < SPR_GRID_W * SPR_GRID_H; i++) {
+            sprite_pixels[i] = 0xFF202028;
+        }
+        SDL_UpdateTexture(sprite_tex, NULL, sprite_pixels, SPR_GRID_W * (int)sizeof(uint32_t));
+    }
+
+    for (int t = 0; t < 2; t++) {
+        chr_tex[t] = SDL_CreateTexture(dbg_renderer,
+            SDL_PIXELFORMAT_ARGB8888,
+            SDL_TEXTUREACCESS_STREAMING,
+            128, 128);
+    }
+
     printf("Debug window ready (press D to toggle)\n");
     return true;
 }
 
 void debug_window_destroy(void) {
+    if (sprite_tex)   { SDL_DestroyTexture(sprite_tex);    sprite_tex = NULL; }
+    for (int t = 0; t < 2; t++) {
+        if (chr_tex[t]) { SDL_DestroyTexture(chr_tex[t]); chr_tex[t] = NULL; }
+    }
     if (dbg_renderer) { SDL_DestroyRenderer(dbg_renderer); dbg_renderer = NULL; }
     if (dbg_win)      { SDL_DestroyWindow(dbg_win);        dbg_win = NULL; }
+    // dbg_font_small may equal dbg_font if the small-size open failed —
+    // only close it if it's a distinct font, else the second close would
+    // double-free.
+    if (dbg_font_small && dbg_font_small != dbg_font) {
+        TTF_CloseFont(dbg_font_small);
+    }
+    dbg_font_small = NULL;
     if (dbg_font)     { TTF_CloseFont(dbg_font);           dbg_font = NULL; }
     TTF_Quit();
 }
@@ -300,6 +382,313 @@ static void render_log(void) {
 static void render_separator(void) {
     SDL_SetRenderDrawColor(dbg_renderer, COL_SEP.r, COL_SEP.g, COL_SEP.b, 255);
     SDL_RenderDrawLine(dbg_renderer, PAD_X, LOG_AREA_H, DBG_WIN_W - PAD_X, LOG_AREA_H);
+    // Separator below the PPU panel
+    SDL_RenderDrawLine(dbg_renderer, PAD_X, PPU_Y + PPU_SECTION_H,
+                       DBG_WIN_W - PAD_X, PPU_Y + PPU_SECTION_H);
+}
+
+// Rasterise one OAM sprite as an 8×8 tile, 3× nearest-neighbour, into the
+// sprite_pixels buffer at the sprite's grid position. Honours horizontal
+// and vertical flip from the attribute byte. In 8×16 mode shows only the
+// top half (the first tile of the pair) — the grid budget doesn't include
+// room for 8×16 cells, and 8×8 is what the games we test use anyway.
+static void render_sprite_into_grid(int sprite_idx) {
+    const uint8_t *oam = ppu_oam_view();
+    uint8_t tile = oam[sprite_idx * 4 + 1];
+    uint8_t attr = oam[sprite_idx * 4 + 2];
+
+    bool flip_h = (attr & 0x40) != 0;
+    bool flip_v = (attr & 0x80) != 0;
+    uint8_t pal_idx = attr & 0x03;
+
+    uint16_t addr;
+    if (ppu_dbg.ctrl & 0x20) {
+        // 8×16 mode — table selected by tile bit 0, tile index masked to even
+        uint16_t table = (tile & 1) ? 0x1000 : 0x0000;
+        uint8_t  index = tile & 0xFE;
+        addr = table + (uint16_t)index * 16;
+    } else {
+        // 8×8 mode — pattern table from ctrl bit 3
+        uint16_t table = (ppu_dbg.ctrl & 0x08) ? 0x1000 : 0x0000;
+        addr = table + (uint16_t)tile * 16;
+    }
+
+    int col = sprite_idx % SPR_GRID_COLS;
+    int row = sprite_idx / SPR_GRID_COLS;
+    int gx  = col * SPR_CELL_W;
+    int gy  = row * SPR_CELL_H;
+
+    // Two background tints distinguish sprite 0's cell.
+    uint32_t transparent_bg = (sprite_idx == 0) ? 0xFF003860 : 0xFF202028;
+
+    for (int sy = 0; sy < 8; sy++) {
+        int src_row = flip_v ? (7 - sy) : sy;
+        uint8_t lo = ppu_bus_read_debug(addr + (uint16_t)src_row);
+        uint8_t hi = ppu_bus_read_debug(addr + (uint16_t)src_row + 8);
+        for (int sx = 0; sx < 8; sx++) {
+            int src_col = flip_h ? (7 - sx) : sx;
+            uint8_t bit = (uint8_t)(7 - src_col);
+            uint8_t pix = (uint8_t)((((hi >> bit) & 1) << 1) | ((lo >> bit) & 1));
+            uint32_t argb = (pix == 0) ? transparent_bg
+                                       : ppu_sprite_color(pal_idx, pix);
+            // Scale the 8×8 source up to SPR_SCALE × SPR_SCALE per source pixel.
+            for (int dy = 0; dy < SPR_SCALE; dy++) {
+                int py = gy + sy * SPR_SCALE + dy;
+                uint32_t *row_p = &sprite_pixels[py * SPR_GRID_W + gx + sx * SPR_SCALE];
+                for (int dx = 0; dx < SPR_SCALE; dx++) {
+                    row_p[dx] = argb;
+                }
+            }
+        }
+    }
+}
+
+// Cache-aware sprite-grid renderer. Detects which sprite cells need
+// re-rasterising by comparing OAM/ctrl/sprite-palette against last frame,
+// re-renders only those cells into the pixel buffer, then uploads the
+// whole texture once and blits it. If nothing changed, we skip the upload
+// and just blit the texture that's already on the GPU.
+static void render_sprite_grid(int x, int y) {
+    if (!sprite_tex) return;
+
+    const uint8_t *oam = ppu_oam_view();
+    const uint8_t *pal = ppu_palette_view();
+
+    bool dirty[64];
+    memset(dirty, 0, sizeof(dirty));
+    bool all_dirty = false;
+
+    // First frame: render everything.
+    if (!sprite_cache_inited) {
+        all_dirty = true;
+        sprite_cache_inited = true;
+    }
+
+    // Sprite-size bit (ctrl bit 5) and 8×8 sprite pattern-table bit
+    // (ctrl bit 3) both affect what gets drawn for every sprite.
+    if ((ppu_dbg.ctrl & 0x28) != (sprite_cache_ctrl & 0x28)) {
+        all_dirty = true;
+    }
+    sprite_cache_ctrl = ppu_dbg.ctrl;
+
+    // Any change in the sprite palette region invalidates every cell's colours.
+    for (int i = 0; i < 16; i++) {
+        if (pal[0x10 + i] != sprite_cache_palette[i]) {
+            all_dirty = true;
+            sprite_cache_palette[i] = pal[0x10 + i];
+        }
+    }
+
+    int dirty_count = 0;
+    if (all_dirty) {
+        for (int i = 0; i < 64; i++) dirty[i] = true;
+        // refresh the OAM cache mirror too so per-byte compare next frame works
+        memcpy(sprite_cache_oam, oam, sizeof(sprite_cache_oam));
+        dirty_count = 64;
+    } else {
+        for (int i = 0; i < 64; i++) {
+            bool changed = false;
+            for (int j = 0; j < 4; j++) {
+                if (oam[i * 4 + j] != sprite_cache_oam[i * 4 + j]) {
+                    changed = true;
+                    sprite_cache_oam[i * 4 + j] = oam[i * 4 + j];
+                }
+            }
+            if (changed) {
+                dirty[i] = true;
+                dirty_count++;
+            }
+        }
+    }
+
+    if (dirty_count > 0) {
+        for (int i = 0; i < 64; i++) {
+            if (dirty[i]) render_sprite_into_grid(i);
+        }
+        SDL_UpdateTexture(sprite_tex, NULL, sprite_pixels,
+                          SPR_GRID_W * (int)sizeof(uint32_t));
+    }
+
+    // Blit and overlay
+    SDL_Rect dst = { x, y, SPR_GRID_W, SPR_GRID_H };
+    SDL_RenderCopy(dbg_renderer, sprite_tex, NULL, &dst);
+
+    // Cyan outline around sprite 0's cell
+    SDL_SetRenderDrawColor(dbg_renderer, 100, 200, 255, 255);
+    SDL_Rect sp0_outline = { x, y, SPR_CELL_W, SPR_CELL_H };
+    SDL_RenderDrawRect(dbg_renderer, &sp0_outline);
+
+    // Row labels in the gutter (sprite # of the leftmost sprite per row)
+    char buf[8];
+    for (int r = 0; r < SPR_GRID_ROWS; r++) {
+        snprintf(buf, sizeof(buf), "%02X", r * SPR_GRID_COLS);
+        draw_text_small(x - SPR_LABEL_W + 2,
+                        y + r * SPR_CELL_H + (SPR_CELL_H - LINE_H_SMALL) / 2,
+                        buf, COL_LABEL);
+    }
+}
+
+// Build one of the two 128×128 pattern-table textures in grayscale.
+// Pattern data is palette-agnostic (the runtime palette is decided per
+// instance), so we render the four 2-bit pixel values as fixed shades.
+static void rebuild_chr_table(int table_idx) {
+    if (!chr_tex[table_idx]) return;
+    uint16_t base = (uint16_t)(table_idx * 0x1000);
+    static const uint32_t SHADE[4] = {
+        0xFF1A1A22,  // pixel 0 (transparent in real rendering)
+        0xFF6B6B7A,
+        0xFFB2B2C0,
+        0xFFE8E8F0
+    };
+    for (int tile = 0; tile < 256; tile++) {
+        int tx = (tile % 16) * 8;
+        int ty = (tile / 16) * 8;
+        uint16_t addr = base + (uint16_t)(tile * 16);
+        for (int row = 0; row < 8; row++) {
+            uint8_t lo = ppu_bus_read_debug(addr + (uint16_t)row);
+            uint8_t hi = ppu_bus_read_debug(addr + (uint16_t)row + 8);
+            for (int col = 0; col < 8; col++) {
+                uint8_t bit = (uint8_t)(7 - col);
+                uint8_t pix = (uint8_t)((((hi >> bit) & 1) << 1)
+                                       | ((lo >> bit) & 1));
+                chr_pixels[table_idx][(ty + row) * 128 + (tx + col)]
+                    = SHADE[pix];
+            }
+        }
+    }
+    SDL_UpdateTexture(chr_tex[table_idx], NULL, chr_pixels[table_idx],
+                      128 * (int)sizeof(uint32_t));
+}
+
+// CHR pattern tables + the 32-byte palette RAM, drawn to the right of the
+// sprite grid. CHR is invalidated by sampling 32 bytes spread across the
+// 8 KiB and comparing against last frame (catches both mapper bank-switches
+// and CHR-RAM writes without hashing the full table). Palette is cheap to
+// re-fill every frame so we don't bother caching.
+static void render_chr_and_palette(int x, int y) {
+    // ---- CHR change detection
+    bool chr_dirty = !chr_cache_inited;
+    for (int i = 0; i < 32; i++) {
+        uint8_t b = ppu_bus_read_debug((uint16_t)(i * 256));
+        if (b != chr_sample[i]) {
+            chr_sample[i] = b;
+            chr_dirty = true;
+        }
+    }
+    if (chr_dirty) {
+        rebuild_chr_table(0);
+        rebuild_chr_table(1);
+        chr_cache_inited = true;
+    }
+
+    // ---- Header + CHR labels (small font)
+    draw_text_small(x, y, "CHR $0000      CHR $1000", COL_LABEL);
+    y += LINE_H_SMALL;
+
+    if (chr_tex[0]) {
+        SDL_Rect d0 = { x,       y, 128, 128 };
+        SDL_RenderCopy(dbg_renderer, chr_tex[0], NULL, &d0);
+    }
+    if (chr_tex[1]) {
+        SDL_Rect d1 = { x + 128, y, 128, 128 };
+        SDL_RenderCopy(dbg_renderer, chr_tex[1], NULL, &d1);
+    }
+    // Thin separator between the two pattern tables
+    SDL_SetRenderDrawColor(dbg_renderer, COL_SEP.r, COL_SEP.g, COL_SEP.b, 255);
+    SDL_RenderDrawLine(dbg_renderer, x + 128, y, x + 128, y + 128);
+    y += 128 + 4;
+
+    // ---- Palette swatches
+    draw_text_small(x, y, "Palette  (BG row / SP row)", COL_LABEL);
+    y += LINE_H_SMALL;
+
+    const uint8_t *pal = ppu_palette_view();
+    const int SW = 16;          // swatch width / height
+
+    // 16 BG palette entries on one row, 16 sprite-palette on the next.
+    for (int half = 0; half < 2; half++) {
+        for (int i = 0; i < 16; i++) {
+            uint8_t entry = pal[half * 0x10 + i];
+            uint32_t argb = ppu_master_color(entry);
+            SDL_SetRenderDrawColor(dbg_renderer,
+                                   (argb >> 16) & 0xFF,
+                                   (argb >>  8) & 0xFF,
+                                   (argb      ) & 0xFF,
+                                   255);
+            SDL_Rect sw = { x + i * SW, y, SW, SW };
+            SDL_RenderFillRect(dbg_renderer, &sw);
+        }
+        // Thin vertical separators every 4 swatches (palette groups)
+        SDL_SetRenderDrawColor(dbg_renderer, COL_SEP.r, COL_SEP.g, COL_SEP.b, 255);
+        for (int g = 1; g < 4; g++) {
+            SDL_RenderDrawLine(dbg_renderer, x + g * 4 * SW, y,
+                               x + g * 4 * SW, y + SW);
+        }
+        y += SW;
+    }
+}
+
+static void render_ppu_panel(void) {
+    int y = PPU_Y + 4;
+    char buf[LOG_LINE_LEN];
+
+    // Heading + frame counters
+    snprintf(buf, sizeof(buf), "--- PPU ---  frame=%u  sl=%d  dot=%d  %s",
+             ppu_dbg.frame, ppu_dbg.scanline, ppu_dbg.dot,
+             ppu_dbg.in_vblank ? "VBL" : "");
+    draw_text(PAD_X, y, buf, COL_HEADING);
+    y += LINE_H;
+
+    // Loopy registers
+    snprintf(buf, sizeof(buf), "v=$%04X  t=$%04X  x=%u  w=%u",
+             ppu_dbg.v, ppu_dbg.t, ppu_dbg.x, ppu_dbg.w);
+    draw_text(PAD_X, y, buf, COL_VALUE);
+    y += LINE_H;
+
+    // Memory-mapped registers
+    snprintf(buf, sizeof(buf), "CTRL=$%02X  MASK=$%02X  STAT=$%02X  OAMa=$%02X",
+             ppu_dbg.ctrl, ppu_dbg.mask, ppu_dbg.status, ppu_dbg.oam_addr);
+    draw_text(PAD_X, y, buf, COL_VALUE);
+    y += LINE_H;
+
+    // Status flags + NMI count
+    {
+        SDL_Color sp0_col = ppu_dbg.sprite0_hit     ? COL_ON : COL_DIM;
+        SDL_Color ovf_col = ppu_dbg.sprite_overflow ? COL_ON : COL_DIM;
+        snprintf(buf, sizeof(buf), "NMI=%u   sp0_hit=%s   sp_ovf=%s",
+                 ppu_dbg.nmi_count,
+                 ppu_dbg.sprite0_hit ? "Y" : "N",
+                 ppu_dbg.sprite_overflow ? "Y" : "N");
+        draw_text(PAD_X, y, buf, COL_LABEL);
+        // Small coloured dots to visualize the two flags at the line tail
+        SDL_SetRenderDrawColor(dbg_renderer, sp0_col.r, sp0_col.g, sp0_col.b, 255);
+        SDL_Rect d1 = { DBG_WIN_W - PAD_X - 28, y + 5, 6, 6 };
+        SDL_RenderFillRect(dbg_renderer, &d1);
+        SDL_SetRenderDrawColor(dbg_renderer, ovf_col.r, ovf_col.g, ovf_col.b, 255);
+        SDL_Rect d2 = { DBG_WIN_W - PAD_X - 12, y + 5, 6, 6 };
+        SDL_RenderFillRect(dbg_renderer, &d2);
+    }
+    y += LINE_H + 6;
+
+    // Sprite-viewer heading
+    {
+        const uint8_t *oam0 = ppu_oam_view();
+        int active = 0;
+        for (int i = 0; i < 64; i++) {
+            if (oam0[i * 4] < 240) active++;
+        }
+        snprintf(buf, sizeof(buf),
+                 "Sprites  active=%d/64  sp0 @ (%u,%u)  %s",
+                 active, oam0[3], oam0[0],
+                 (ppu_dbg.ctrl & 0x20) ? "[8x16: top tile only]" : "[8x8]");
+        draw_text(PAD_X, y, buf, COL_HEADING);
+        y += LINE_H + 2;
+    }
+
+    // Visual sprite grid (left) + CHR pattern tables and palette (right)
+    int grid_x = PAD_X + SPR_LABEL_W;
+    render_sprite_grid(grid_x, y);
+    render_chr_and_palette(grid_x + SPR_GRID_W + 10, y);
 }
 
 static void render_state(const CPU *cpu) {
@@ -471,7 +860,9 @@ void debug_window_update(const CPU *cpu) {
     SDL_RenderClear(dbg_renderer);
 
     render_log();
-    render_separator();        // line between log and waveforms
+    render_separator();        // lines below log AND below PPU panel
+
+    render_ppu_panel();        // PPU state + OAM table
 
     render_waveforms();
 

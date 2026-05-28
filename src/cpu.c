@@ -100,8 +100,14 @@ void cpu_nmi(CPU *cpu){
     // read from NMI vector
     uint8_t lo = bus_read(0xFFFA); // low byte
     uint8_t hi = bus_read(0xFFFB); // high byte
-    // loads program counter with NMI handler 
+    // loads program counter with NMI handler
     cpu->pc = (hi << 8) | lo;
+
+    // NMI takes 7 cycles on real hardware. Bumping cpu->cycles extends the
+    // per-cycle tick loop in run_cycles so APU/PPU advance through those
+    // 7 cycles (21 PPU dots) the same as they would on real HW.
+    cpu->cycles      += 7;
+    cpu->total_cycles += 7;
 }
 
 // interrupt request
@@ -118,6 +124,10 @@ void cpu_irq(CPU *cpu){
     uint8_t lo = bus_read(0xFFFE);
     uint8_t hi = bus_read(0xFFFF);
     cpu->pc = (hi << 8) | lo;
+
+    // IRQ takes 7 cycles on real hardware; same bookkeeping as NMI.
+    cpu->cycles      += 7;
+    cpu->total_cycles += 7;
 }
 
 void audio_callback(void *userdata, Uint8 *stream, int len) {

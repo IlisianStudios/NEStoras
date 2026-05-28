@@ -266,20 +266,22 @@ static uint8_t bit_reverse(uint8_t b) {
     return b;
 }
 
-static void sprite_evaluate(void) {
+static void sprite_evaluate(int next_line) {
     // Clear secondary OAM to $FF
     memset(ppu.oam2, 0xFF, sizeof(ppu.oam2));
     ppu.oam2_count = 0;
     ppu.sprite0_in_range_next = false;
 
+    if (next_line < 0 || next_line >= PPU_FRAME_H) return;
+
     uint8_t height = (ppu.ctrl & 0x20) ? 16 : 8;
-    int next_line = ppu.scanline + 1;
-    if (next_line >= PPU_FRAME_H) return;  // sprites not evaluated for post/vblank
 
     int n;
     for (n = 0; n < 64; n++) {
         uint8_t sy = ppu.oam[n * 4 + 0];
-        int row = next_line - sy;
+        // OAM Y is delayed by one scanline: a sprite with OAM Y == sy
+        // renders on scanlines sy+1 .. sy+height.
+        int row = next_line - sy - 1;
         if (row < 0 || row >= height) continue;
         if (ppu.oam2_count < 8) {
             ppu.oam2[ppu.oam2_count * 4 + 0] = ppu.oam[n * 4 + 0];
@@ -298,9 +300,8 @@ static void sprite_evaluate(void) {
     }
 }
 
-static void sprite_fetch(void) {
+static void sprite_fetch(int next_line) {
     uint8_t height = (ppu.ctrl & 0x20) ? 16 : 8;
-    int next_line = ppu.scanline + 1;
 
     // Stage current scanline's sprites from what eval just produced.
     // (We swap "next" → "current" implicitly because we always render from
@@ -322,7 +323,8 @@ static void sprite_fetch(void) {
         uint8_t attr = ppu.oam2[i * 4 + 2];
         uint8_t sx   = ppu.oam2[i * 4 + 3];
 
-        int row = next_line - sy;
+        // OAM Y is delayed by one scanline (see sprite_evaluate).
+        int row = next_line - sy - 1;
         bool flip_v = (attr & 0x80) != 0;
         bool flip_h = (attr & 0x40) != 0;
 
@@ -642,14 +644,16 @@ void ppu_step(CPU *cpu) {
         // Lump sprite eval + fetch at dot 257 (simplified — see comment in
         // sprite_evaluate). This is correct visually for almost everything.
         if (ppu.dot == 257) {
-            sprite_evaluate();
-            sprite_fetch();
+            int next_line = ppu.scanline + 1;
+            sprite_evaluate(next_line);
+            sprite_fetch(next_line);
         }
     } else if (is_prerender && ppu.dot == 257) {
-        // Pre-render: nothing visible on line -1, but we still want sprites
-        // ready for line 0. Eval/fetch for "next_line = 0".
-        sprite_evaluate();
-        sprite_fetch();
+        // Pre-render: prepare sprites for scanline 0 of the new frame.
+        // (ppu.scanline+1 here would be 262/312 — past the frame — so we
+        //  pass 0 explicitly.)
+        sprite_evaluate(0);
+        sprite_fetch(0);
     }
 
     // ---- Pixel ------------------------------------------------------------

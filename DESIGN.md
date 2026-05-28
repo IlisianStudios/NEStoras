@@ -1,7 +1,9 @@
 # NEStoras — NES Emulator Design Document
 
-> A hands-on guide to building a NES emulator in C/C++ with SDL2.
+> A hands-on guide to building a NES emulator in **C** with SDL2.
 > Start with understanding, move to implementation, use the reference tables when you need the details.
+
+> **Note:** NEStoras has progressed past the "from scratch" stage of this document. CPU, PPU, APU, NROM, and the debug window are all working and SMB plays through. The CPU implementation guide and hardware reference below are kept for understanding the design; the [Implementation Status](#implementation-status) section near the top and the marked-off [Development Roadmap](#development-roadmap) reflect what's actually built. The cycle-accurate PPU design lives in its own doc: [PPU_SPEC.md](PPU_SPEC.md).
 
 ---
 
@@ -27,6 +29,7 @@ This document is split into two halves:
 ## Table of Contents
 
 ### Part 1 — Understanding & Implementation
+0. [Implementation Status](#implementation-status) — **what currently works**
 1. [Project Overview](#project-overview)
 2. [NES Architecture Overview](#nes-architecture-overview)
 3. [Hardware Specs at a Glance](#hardware-specs-at-a-glance)
@@ -51,9 +54,32 @@ This document is split into two halves:
 
 # Part 1 — Understanding & Implementation
 
+## Implementation Status
+
+What's working today (as of the `ppu-pandie` branch, May 2026):
+
+| Subsystem | Status | Notes |
+|---|---|---|
+| **CPU** (Ricoh 2A03 / 6502 core) | ✅ | Full official instruction set + common illegal opcodes; passes `nestest.nes`; NMI/IRQ have proper 7-cycle service cost |
+| **Memory bus** | ✅ | RAM mirroring, PPU register dispatch, APU/IO dispatch, OAMDMA, cartridge passthrough |
+| **iNES loader** | ✅ | Detects PRG/CHR size, mapper ID, mirroring, PAL flag |
+| **Mapper 0 — NROM** | ✅ | NROM-128 + NROM-256 with both common CHR sizes |
+| **Other mappers** | ❌ | Not yet |
+| **APU** | ✅ | Pulse 1 & 2 (envelope, sweep, length), triangle, noise (LFSR), DMC (memory reader + output unit, IRQ); 4-step + 5-step frame counter; nesdev mixer formulas; high-pass / low-pass filter chain; SDL2 audio with ring-buffer back-pressure as throttle |
+| **PPU** (Ricoh 2C02) | ✅ | Cycle-accurate (per-dot) inside a catch-up step model called from `run_cycles`; full background fetch pipeline with `v`/`t`/`x`/`w` Loopy scroll; sprite evaluation + fetch + pixel mux; sprite 0 hit with all five hardware conditions; sprite overflow flag; correct OAM-Y +1 delay; pre-render line including odd-frame dot skip; ARGB framebuffer uploaded once per vblank |
+| **PAL support** | ✅ | 312-scanline frame, PAL APU frame counter periods, PAL DMC rate table, 1:3.2 CPU-PPU ratio handled in `run_cycles` |
+| **Controller 1** | ✅ | Keyboard mapped to the standard A/B/Select/Start + D-pad serial protocol |
+| **Controller 2** | ❌ | Not yet |
+| **Debug window** | ✅ | SDL2_ttf overlay with CPU instruction log, PPU state (Loopy regs, ctrl/mask/status, NMI count, sp0_hit/overflow), visual 8×8 sprite-grid OAM viewer (sprite 0 highlighted, change-detection caching), both CHR pattern tables, 32-entry palette swatches, APU per-channel scrolling scopes (P1/P2/TRI/NOI/DMC + mix), and live channel/length/volume state |
+| **Save states** | ❌ | Not yet |
+
+The PPU's design (cycle-accurate stepping, catch-up integration model, NMI semantics, the wiring/migration that ripped out an earlier APU-fake-NMI placeholder) lives in [PPU_SPEC.md](../PPU_SPEC.md). When in doubt about PPU behaviour, that's the canonical doc; this design document predates it and is kept for understanding the *general* NES architecture.
+
+---
+
 ## Project Overview
 
-**NEStoras** is a NES (Nintendo Entertainment System) emulator written in **C/C++** using **SDL2** for cross-platform rendering, audio, and input.
+**NEStoras** is a NES (Nintendo Entertainment System) emulator written in **C** (C11) using **SDL2** for cross-platform rendering, audio, and input.
 
 If you've never built an emulator before, here's the short version: an emulator is a program that pretends to be a piece of hardware. Your code reads the same game ROM that the original console would read, and does the same work the console's chips would do — processing instructions, drawing pixels, producing sound. The result is a program on your computer that runs NES games.
 
@@ -70,10 +96,11 @@ This is a big project, but it's very doable if you take it one piece at a time. 
 
 | Component       | Choice              |
 |-----------------|---------------------|
-| Language        | C/C++               |
+| Language        | C (C11)             |
 | Graphics/Input  | SDL2                |
 | Audio           | SDL2 Audio          |
-| Build System    | CMake (planned)     |
+| Debug overlay   | SDL2_ttf            |
+| Build System    | CMake               |
 | ROM Format      | iNES (.nes)         |
 
 ---
@@ -1463,97 +1490,102 @@ After 8 reads, further reads return 1 (open bus behavior varies).
 
 ## Development Roadmap
 
-This is the order that works. Each phase builds on the last, and each has clear criteria for "done" before you move on.
+This is the order that worked. Each phase builds on the last, and each had clear criteria for "done" before moving on. Phases 1–8 are complete; remaining work is mappers, polish, and accuracy ROMs.
 
-### Phase 1 — CPU (6502 core)
+### Phase 1 — CPU (6502 core) — ✅ done
 
-- [ ] Implement all official 6502 instructions (56 instructions, all addressing modes)
-- [ ] Cycle-accurate execution (correct cycle counts per instruction)
-- [ ] Status flag handling (N, V, B, D, I, Z, C)
-- [ ] Stack operations ($0100–$01FF)
-- [ ] Interrupt handling (NMI, IRQ, RESET)
-- [ ] CPU logging (format compatible with nestest.log for verification)
+- [x] Implement all official 6502 instructions (56 instructions, all addressing modes)
+- [x] Cycle-accurate execution (correct cycle counts per instruction)
+- [x] Status flag handling (N, V, B, D, I, Z, C)
+- [x] Stack operations ($0100–$01FF)
+- [x] Interrupt handling (NMI, IRQ, RESET) — 7-cycle service cost on both NMI and IRQ
+- [x] CPU logging (format compatible with nestest.log for verification)
 
-### Phase 2 — iNES ROM Loading + Mapper 0
+### Phase 2 — iNES ROM Loading + Mapper 0 — ✅ done
 
-- [ ] Parse iNES header (detect PRG/CHR size, mapper number, mirroring)
-- [ ] Load PRG ROM into CPU address space ($8000–$FFFF)
-- [ ] Load CHR ROM into PPU pattern tables ($0000–$1FFF)
-- [ ] Implement Mapper 0 (NROM-128 and NROM-256)
+- [x] Parse iNES header (detect PRG/CHR size, mapper number, mirroring)
+- [x] Load PRG ROM into CPU address space ($8000–$FFFF)
+- [x] Load CHR ROM into PPU pattern tables ($0000–$1FFF)
+- [x] Implement Mapper 0 (NROM-128 and NROM-256)
+- [x] PAL detection (header byte 9 bit 0 + filename heuristic for badly-flagged ROMs)
 
-### Phase 3 — Validate CPU with Test ROMs
+### Phase 3 — Validate CPU with Test ROMs — ✅ done
 
-- [ ] Run **nestest.nes** (automation mode at $C000) — compare output against nestest.log
-- [ ] Run blargg's **cpu_instrs** test suite
-- [ ] Fix all CPU bugs before moving to PPU
-- [ ] Add unofficial opcodes as test ROMs require them
+- [x] Run **nestest.nes** (automation mode at $C000) — compares output against nestest.log line-by-line
+- [x] Fix all CPU bugs caught by nestest
+- [x] Add unofficial opcodes nestest exercises
 
-### Phase 4 — PPU (no scrolling)
+### Phase 4 — PPU — ✅ done
 
-- [ ] Implement PPU registers ($2000–$2007, PPUSTATUS read side-effects)
-- [ ] Pattern table reading (CHR ROM → tile decoding)
-- [ ] Nametable rendering (background tiles)
-- [ ] Attribute table (palette selection per 2×2 tile area)
-- [ ] Palette RAM
-- [ ] Sprite evaluation and rendering (OAM, sprite priority)
-- [ ] OAM DMA ($4014)
-- [ ] VBlank / NMI timing
-- [ ] Sprite 0 hit detection
-- [ ] Render to SDL2 window (256×240, scaled)
+- [x] Implement PPU registers ($2000–$2007, PPUSTATUS read side-effects, w toggle, $2007 read buffer)
+- [x] Pattern table reading (CHR ROM → tile decoding)
+- [x] Nametable rendering (background tiles)
+- [x] Attribute table (palette selection per 2×2 tile area)
+- [x] Palette RAM with $3F10/14/18/1C mirror folding
+- [x] Sprite evaluation, fetch, and rendering (OAM, OAM Y +1 delay, priority)
+- [x] OAM DMA ($4014) — 513/514 cycle CPU stall
+- [x] VBlank / NMI timing (PPU is the sole NMI source; APU's fake-NMI placeholder removed)
+- [x] Sprite 0 hit detection (all five hardware conditions)
+- [x] Sprite overflow flag
+- [x] Odd-frame pre-render dot skip
+- [x] Render 256×240 framebuffer to SDL2 window via streaming texture, scaled by `SDL_RenderSetLogicalSize`
 
-### Phase 5 — Simple Games (no scrolling)
+### Phase 5 — Simple Games — ✅ done
 
-- [ ] **Donkey Kong** — great first test (Mapper 0, no scroll)
-- [ ] **Balloon Fight** — another good Mapper 0 test
-- [ ] Add controller input via SDL2 keyboard/gamepad
-- [ ] Debug rendering issues using Mesen as reference
+- [x] **Donkey Kong** — Mapper 0, no scroll; plays correctly
+- [x] Controller input via SDL2 keyboard
+- [x] Debug rendering against Mesen as reference
 
-### Phase 6 — Scrolling
+### Phase 6 — Scrolling — ✅ done
 
-- [ ] Implement the "loopy" PPU internal registers (v, t, x, w)
-- [ ] PPUSCROLL ($2005) write handling
-- [ ] PPUADDR ($2006) interaction with scrolling
-- [ ] Mid-frame scroll changes
-- [ ] Test with **Ice Climber** (vertical scroll)
+- [x] Loopy `v`/`t`/`x`/`w` internal registers
+- [x] PPUSCROLL ($2005) writes — first/second write toggle
+- [x] PPUADDR ($2006) interaction with `v`/`t`
+- [x] Mid-frame scroll changes via the sprite-0-hit polling + $2005/$2006 pattern
+- [x] `copy_hori_v_from_t` at dot 257; `copy_vert_v_from_t` at pre-render dots 280–304
 
-### Phase 7 — Super Mario Bros
+### Phase 7 — Super Mario Bros — ✅ done
 
-- [ ] Horizontal scrolling with nametable switching
-- [ ] Verify CPU/PPU timing accuracy
-- [ ] Fix any remaining rendering or timing bugs
-- [ ] This is the key milestone — SMB is demanding but fair
+- [x] Horizontal scrolling with nametable switching
+- [x] Sprite-0-hit-driven status bar split with no vertical misalignment after the OAM-Y delay fix
 
-### Phase 8 — APU (Audio)
+### Phase 8 — APU (Audio) — ✅ done
 
-- [ ] Implement pulse channels (duty cycle, sweep, envelope)
-- [ ] Implement triangle channel (linear counter)
-- [ ] Implement noise channel (LFSR, envelope)
-- [ ] Implement DMC channel (delta modulation sample playback)
-- [ ] Frame counter (4-step and 5-step modes)
-- [ ] Audio mixing and output via SDL2 audio callback
-- [ ] Length counter table, envelope decay
+- [x] Pulse channels (duty cycle, sweep, envelope)
+- [x] Triangle channel (linear counter)
+- [x] Noise channel (LFSR, envelope)
+- [x] DMC channel (sample reader, output unit, IRQ on sample end)
+- [x] Frame counter (4-step and 5-step modes, IRQ inhibit)
+- [x] Audio mixing per nesdev formulas, high-pass + low-pass filter chain
+- [x] Audio output via SDL2 audio callback + ring buffer
+- [x] Ring-buffer back-pressure as the wall-clock throttle (AUDIO_SYNC timing mode)
 
-### Phase 9 — More Mappers
+### Phase 9 — More Mappers — ⏳ pending
 
-- [ ] **Mapper 1** (MMC1) — serial register, bank switching
+- [ ] **Mapper 1** (MMC1) — serial register, bank switching, mirroring control
 - [ ] **Mapper 2** (UxROM) — switchable PRG, CHR RAM
 - [ ] **Mapper 3** (CNROM) — switchable CHR ROM
-- [ ] **Mapper 4** (MMC3) — bank switching + scanline IRQ
+- [ ] **Mapper 4** (MMC3) — bank switching + scanline IRQ (PPU-A12 watcher)
 - [ ] Test each mapper with appropriate games
 
-### Phase 10 — Tricky Games
+### Phase 10 — Accuracy & Tricky Games — ⏳ pending
 
-- [ ] **Battletoads** — notoriously difficult to emulate correctly
+- [ ] Run blargg's `cpu_instrs` test suite
+- [ ] Run `ppu_vbl_nmi` test ROMs (NMI / vblank-flag timing)
+- [ ] Run `ppu_sprite_hit` and `ppu_sprite_overflow` test ROMs
+- [ ] Sub-instruction PPU sync for `$2002` reads (eliminates the residual SMB split-line jitter that catch-up emulators have)
+- [ ] **Battletoads** — notoriously timing-sensitive
 - [ ] Reference: https://www.nesdev.org/wiki/Tricky-to-emulate_games
 
-### Phase 11 — Polish & Extras
+### Phase 11 — Polish & Extras — ⏳ pending
 
 - [ ] Save states (serialize full emulator state)
 - [ ] Battery-backed SRAM (save to file at $6000–$7FFF)
-- [ ] Debugger (CPU step, memory view, PPU viewer)
+- [ ] Second controller
+- [ ] Step-debugger UI in the debug window (memory viewer, breakpoints)
 - [ ] Rewind / fast-forward
 - [ ] Configuration file (key bindings, scaling, etc.)
-- [ ] Performance optimization
+- [ ] Performance pass on the debug window (text-rendering cache; currently each text draw creates and destroys a texture)
 
 ---
 

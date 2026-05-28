@@ -178,8 +178,10 @@ bool debug_window_init(SDL_Window *main_window, bool *testing_mode) {
     }
     dbg_win_id = SDL_GetWindowID(dbg_win);
 
-    dbg_renderer = SDL_CreateRenderer(dbg_win, -1,
-        SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    // No vsync — the debug window has its own self-throttle (DRAW_INTERVAL_MS).
+    // Vsync here would block the main loop's CPU/APU/PPU stepping inside
+    // SDL_RenderPresent every frame, starving the audio ring buffer.
+    dbg_renderer = SDL_CreateRenderer(dbg_win, -1, SDL_RENDERER_ACCELERATED);
     if (!dbg_renderer) {
         fprintf(stderr, "debug_window: SDL_CreateRenderer failed: %s\n", SDL_GetError());
         SDL_DestroyWindow(dbg_win); dbg_win = NULL;

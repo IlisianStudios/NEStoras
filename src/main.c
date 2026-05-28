@@ -133,6 +133,17 @@ void handle_event_type(const SDL_Event *event) {
             running = false;
             break;
         }
+        case SDL_WINDOWEVENT: {
+            // The debug window consumes its own CLOSE in debug_window_handle_event
+            // (returns true), so any close reaching here is the main window's
+            // red button on macOS / X button on Win/Linux.
+            if (event->window.event == SDL_WINDOWEVENT_CLOSE) {
+                nestest_close(&nestest_log);
+                try_free_cartridge();
+                running = false;
+            }
+            break;
+        }
         case SDL_DROPFILE: {
             printf("Dropping file: %s\n", event->drop.file);
             if (!cartridge_load(event->drop.file))

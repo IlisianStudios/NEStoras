@@ -13,7 +13,7 @@ jobs:
   # Linux
   # ---------------------------------------------------------------------------
   build-linux:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -125,13 +125,13 @@ jobs:
   # ---------------------------------------------------------------------------
   build-windows:
     runs-on: windows-latest
+    env:
+      # The runner ships a pre-installed vcpkg at C:\vcpkg, and the default
+      # GHA binary-cache backend needs tokens we don't have. Turn it off.
+      VCPKG_BINARY_SOURCES: clear
+      VCPKG_ROOT: C:\vcpkg
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up vcpkg
-        uses: lukka/run-vcpkg@v11
-        with:
-          vcpkgGitCommitId: 'a42af01b72c28a8e1d7b48107b33e4f286a55ef6'
 
       - name: Install dependencies
         shell: pwsh

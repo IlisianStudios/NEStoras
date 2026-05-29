@@ -48,6 +48,8 @@ endif()
 
 target_compile_options(NEStoras PRIVATE
     $<$<C_COMPILER_ID:AppleClang,Clang,GNU>:-Wall -Wextra -Wpedantic>
+    # MSVC gates <stdatomic.h> behind an experimental flag (VS 2022 17.5+).
+    $<$<C_COMPILER_ID:MSVC>:/experimental:c11atomics>
 )
 
 # Define the source and destination paths

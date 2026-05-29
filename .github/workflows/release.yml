@@ -1,0 +1,210 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Linux
+  # ---------------------------------------------------------------------------
+  build-linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build \
+                                  libsdl2-dev libsdl2-ttf-dev
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Bundle standalone package
+        run: |
+          PKG=NEStoras-linux-x64
+          mkdir -p "$PKG/lib"
+
+          cp build/NEStoras "$PKG/"
+
+          # Copy direct SDL2 shared libs and their soname targets.
+          for lib in libSDL2-2.0.so.0 libSDL2_ttf-2.0.so.0; do
+            src=$(ldconfig -p | awk -v l="$lib" '$1==l {print $NF; exit}')
+            if [ -n "$src" ]; then
+              cp -L "$src" "$PKG/lib/$lib"
+            fi
+          done
+
+          # Launcher that points the loader at the bundled libs.
+          cat > "$PKG/NEStoras.sh" <<'EOF'
+          #!/usr/bin/env bash
+          DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+          export LD_LIBRARY_PATH="$DIR/lib:${LD_LIBRARY_PATH:-}"
+          exec "$DIR/NEStoras" "$@"
+          EOF
+          chmod +x "$PKG/NEStoras.sh"
+
+          cp README.md "$PKG/" || true
+
+          zip -r "$PKG.zip" "$PKG"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NEStoras-linux-x64
+          path: NEStoras-linux-x64.zip
+
+  # ---------------------------------------------------------------------------
+  # macOS (universal: x86_64 + arm64 if runner supports it; otherwise host arch)
+  # ---------------------------------------------------------------------------
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: brew install cmake sdl2 sdl2_ttf
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$(brew --prefix sdl2);$(brew --prefix sdl2_ttf)"
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Bundle standalone package
+        run: |
+          PKG=NEStoras-macos
+          mkdir -p "$PKG/lib"
+
+          cp build/NEStoras "$PKG/"
+
+          # Resolve & copy every non-system dylib the binary references,
+          # then rewrite the install names to @executable_path/lib.
+          fix_deps() {
+            local bin="$1"
+            local deps
+            deps=$(otool -L "$bin" | awk 'NR>1 {print $1}' \
+                   | grep -Ev '^(/usr/lib|/System)' || true)
+            for dep in $deps; do
+              local name
+              name=$(basename "$dep")
+              if [ ! -f "$PKG/lib/$name" ]; then
+                cp "$dep" "$PKG/lib/$name"
+                chmod u+w "$PKG/lib/$name"
+                install_name_tool -id "@executable_path/lib/$name" "$PKG/lib/$name"
+                fix_deps "$PKG/lib/$name"
+              fi
+              install_name_tool -change "$dep" "@executable_path/lib/$name" "$bin"
+            done
+          }
+
+          fix_deps "$PKG/NEStoras"
+
+          cp README.md "$PKG/" || true
+
+          # Use ditto so resource forks / signatures survive the zip.
+          ditto -c -k --sequesterRsrc --keepParent "$PKG" "$PKG.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NEStoras-macos
+          path: NEStoras-macos.zip
+
+  # ---------------------------------------------------------------------------
+  # Windows (MSVC + vcpkg)
+  # ---------------------------------------------------------------------------
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: 'a42af01b72c28a8e1d7b48107b33e4f286a55ef6'
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          & "$env:VCPKG_ROOT\vcpkg.exe" install sdl2:x64-windows sdl2-ttf:x64-windows
+
+      - name: Configure
+        shell: pwsh
+        run: |
+          cmake -S . -B build -A x64 `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build build --config Release
+
+      - name: Bundle standalone package
+        shell: pwsh
+        run: |
+          $pkg = "NEStoras-windows-x64"
+          New-Item -ItemType Directory -Force -Path $pkg | Out-Null
+
+          Copy-Item build\Release\NEStoras.exe $pkg\
+
+          # Copy every DLL vcpkg dropped next to the binary.
+          Get-ChildItem build\Release\*.dll -ErrorAction SilentlyContinue |
+            ForEach-Object { Copy-Item $_.FullName $pkg\ }
+
+          # Fallback: pull DLLs straight from the vcpkg install tree.
+          $bin = "$env:VCPKG_ROOT\installed\x64-windows\bin"
+          if (Test-Path $bin) {
+            Get-ChildItem $bin\*.dll | ForEach-Object {
+              if (-not (Test-Path "$pkg\$($_.Name)")) {
+                Copy-Item $_.FullName $pkg\
+              }
+            }
+          }
+
+          Copy-Item README.md $pkg\ -ErrorAction SilentlyContinue
+
+          Compress-Archive -Path $pkg -DestinationPath "$pkg.zip" -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NEStoras-windows-x64
+          path: NEStoras-windows-x64.zip
+
+  # ---------------------------------------------------------------------------
+  # Publish a rolling "latest" release with all three zips.
+  # ---------------------------------------------------------------------------
+  release:
+    needs: [build-linux, build-macos, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Flatten artifacts
+        run: |
+          mkdir -p release
+          find dist -name '*.zip' -exec cp {} release/ \;
+          ls -la release
+
+      - name: Publish rolling release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest build (main)
+          body: |
+            Automated build from the latest commit on `main` (${{ github.sha }}).
+            Standalone zips for Linux, macOS, and Windows.
+          files: release/*.zip
+          prerelease: true
+          make_latest: 'true'

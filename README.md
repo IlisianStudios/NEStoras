@@ -2,6 +2,12 @@
 
 A NES (Nintendo Entertainment System) emulator written in **C** with SDL2.
 
+## Supported Mappers
+
+| Mapper | Name | Supported Games |
+|---|---|---|
+| 0 | NROM | [Supported games](https://nesdir.github.io/mapper0.html) |
+
 ## Status
 
 | Subsystem | State |

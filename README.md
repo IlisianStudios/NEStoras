@@ -8,6 +8,7 @@ A NES (Nintendo Entertainment System) emulator written in **C** with SDL2 includ
 
 - [Supported Mappers](#supported-mappers)
 - [Status](#status)
+- [Contributing](#contributing)
 - [Build](#build)
   - [macOS](#macos)
   - [Windows](#windows)
@@ -44,6 +45,22 @@ A NES (Nintendo Entertainment System) emulator written in **C** with SDL2 includ
 | Built-in debug window                 | Working (PPU panel, sprite viewer, CHR + palette, APU scope) |
 
 SMB plays through. See [PPU_SPEC.md](PPU_SPEC.md) for the PPU design notes.
+
+## Contributing
+
+Contributions are welcome and encouraged — bug fixes, accuracy improvements,
+documentation, and especially **new mapper implementations**. The vast majority
+of the NES library lives outside Mapper 0, so adding MMC1, UxROM, CNROM, MMC3,
+and friends is the single most impactful way to expand what NEStoras can run.
+
+If you'd like to help:
+
+- Open an issue describing what you'd like to tackle (especially for larger
+  changes) so we can coordinate.
+- Fork, branch off `main`, and open a pull request. Match the existing C style
+  (see the source for conventions) and keep changes focused.
+- For mappers, please include at least one test ROM result or a short note on
+  which commercial titles you verified against.
 
 ## Build
 

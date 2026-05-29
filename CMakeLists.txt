@@ -32,7 +32,19 @@ target_include_directories(NEStoras PRIVATE
     ${SDL2_INCLUDE_DIRS}
 )
 
-target_link_libraries(NEStoras PRIVATE SDL2::SDL2 SDL2_ttf::SDL2_ttf)
+target_link_libraries(NEStoras PRIVATE
+    $<TARGET_NAME_IF_EXISTS:SDL2::SDL2main>
+    SDL2::SDL2
+    SDL2_ttf::SDL2_ttf
+)
+
+if(WIN32)
+    # Windowed subsystem (no console) only for non-Debug builds; Debug keeps
+    # the console so printf / fprintf(stderr, ...) stay visible.
+    set_target_properties(NEStoras PROPERTIES
+        WIN32_EXECUTABLE $<NOT:$<CONFIG:Debug>>
+    )
+endif()
 
 target_compile_options(NEStoras PRIVATE
     $<$<C_COMPILER_ID:AppleClang,Clang,GNU>:-Wall -Wextra -Wpedantic>

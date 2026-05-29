@@ -1,5 +1,6 @@
 #include "ringbuffer.h"
 
+#include <stdatomic.h>
 #include <string.h>
 #include <SDL2/SDL.h>
 
@@ -28,7 +29,7 @@ void ring_buffer_push(float sample) {
     int16_t pcm = (int16_t)(sample * 32767.0f);
     ring.samples[ring.write_pos & RING_BUFFER_MASK] = pcm;
 
-    __sync_synchronize();
+    atomic_thread_fence(memory_order_seq_cst);
 
     ring.write_pos++;
 }
@@ -38,7 +39,7 @@ int16_t ring_buffer_pop(void) {
 
     int16_t pcm = ring.samples[ring.read_pos & RING_BUFFER_MASK];
 
-    __sync_synchronize();
+    atomic_thread_fence(memory_order_seq_cst);
 
     ring.read_pos++;
     return pcm;

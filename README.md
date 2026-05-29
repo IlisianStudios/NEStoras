@@ -4,6 +4,19 @@ A NES (Nintendo Entertainment System) emulator written in **C** with SDL2 includ
 
 ![Alt text](./screenshots/both.jpg)
 
+## Table of Contents
+
+- [Supported Mappers](#supported-mappers)
+- [Status](#status)
+- [Build](#build)
+  - [macOS](#macos)
+  - [Windows](#windows)
+  - [Linux](#linux)
+- [Run](#run)
+- [Controls](#controls)
+- [Documentation](#documentation)
+- [Project Layout](#project-layout)
+
 ## Supported Mappers
 
 
@@ -32,12 +45,13 @@ A NES (Nintendo Entertainment System) emulator written in **C** with SDL2 includ
 
 SMB plays through. See [PPU_SPEC.md](PPU_SPEC.md) for the PPU design notes.
 
-## Build 
+## Build
 
 Requires SDL2, SDL2_ttf, CMake, and a C11 compiler.
 
+### macOS
+
 ```bash
-# macOS
 brew install cmake sdl2 sdl2_ttf
 xcode-select --install
 
@@ -51,6 +65,59 @@ If CMake can't find SDL2, point it explicitly:
 ```bash
 cmake -S . -B build \
   -DCMAKE_PREFIX_PATH="$(brew --prefix sdl2);$(brew --prefix sdl2_ttf)"
+```
+
+### Windows
+
+Using [MSYS2](https://www.msys2.org/) (MinGW-w64 UCRT64 shell):
+
+```bash
+pacman -S --needed mingw-w64-ucrt-x86_64-toolchain \
+                   mingw-w64-ucrt-x86_64-cmake \
+                   mingw-w64-ucrt-x86_64-SDL2 \
+                   mingw-w64-ucrt-x86_64-SDL2_ttf
+
+cmake -S . -B build -G "Ninja"
+cmake --build build
+```
+
+Using Visual Studio (MSVC) with [vcpkg](https://vcpkg.io/):
+
+```powershell
+vcpkg install sdl2 sdl2-ttf
+
+cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%/scripts/buildsystems/vcpkg.cmake
+cmake --build build --config Release
+```
+
+### Linux
+
+Debian / Ubuntu:
+
+```bash
+sudo apt update
+sudo apt install build-essential cmake libsdl2-dev libsdl2-ttf-dev
+
+cmake -S . -B build
+cmake --build build
+```
+
+Fedora:
+
+```bash
+sudo dnf install gcc cmake SDL2-devel SDL2_ttf-devel
+
+cmake -S . -B build
+cmake --build build
+```
+
+Arch:
+
+```bash
+sudo pacman -S base-devel cmake sdl2 sdl2_ttf
+
+cmake -S . -B build
+cmake --build build
 ```
 
 ## Run
